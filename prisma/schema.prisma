@@ -6,9 +6,585 @@ datasource db {
   provider = "postgresql"
 }
 
-// Example model — replace with your own.
-model Campaign {
-  id        Int      @id @default(autoincrement())
-  name      String
+// ---------------------------------------------------------------------------
+// Enums — the fixed sets defined by the 5e rules. Free-text is kept elsewhere
+// (race, className, item/condition names) so homebrew stays open; these are
+// closed sets where validation and derived math (e.g. skill -> ability) matter.
+// ---------------------------------------------------------------------------
+enum Ability {
+  STR
+  DEX
+  CON
+  INT
+  WIS
+  CHA
+}
+
+enum Alignment {
+  LG // Lawful Good
+  NG // Neutral Good
+  CG // Chaotic Good
+  LN // Lawful Neutral
+  TN // True Neutral
+  CN // Chaotic Neutral
+  LE // Lawful Evil
+  NE // Neutral Evil
+  CE // Chaotic Evil
+}
+
+enum Skill {
+  ACROBATICS // DEX
+  ANIMAL_HANDLING // WIS
+  ARCANA // INT
+  ATHLETICS // STR
+  DECEPTION // CHA
+  HISTORY // INT
+  INSIGHT // WIS
+  INTIMIDATION // CHA
+  INVESTIGATION // INT
+  MEDICINE // WIS
+  NATURE // INT
+  PERCEPTION // WIS
+  PERFORMANCE // CHA
+  PERSUASION // CHA
+  RELIGION // INT
+  SLEIGHT_OF_HAND // DEX
+  STEALTH // DEX
+  SURVIVAL // WIS
+}
+
+enum SkillProficiency {
+  PROFICIENT
+  EXPERTISE
+  HALF // Jack of All Trades / Remarkable Athlete
+}
+
+enum SpellSchool {
+  ABJURATION
+  CONJURATION
+  DIVINATION
+  ENCHANTMENT
+  EVOCATION
+  ILLUSION
+  NECROMANCY
+  TRANSMUTATION
+}
+
+enum FeatureSource {
+  RACE
+  CLASS
+  SUBCLASS
+  BACKGROUND
+  FEAT
+}
+
+enum RestType {
+  SHORT
+  LONG
+  OTHER // e.g. dawn, per-turn, recharge X-Y
+}
+
+enum CreatureSize {
+  TINY
+  SMALL
+  MEDIUM
+  LARGE
+  HUGE
+  GARGANTUAN
+}
+
+// --- Item catalog enums --------------------------------------------------
+// Broad bucket for a catalog item. Weapon/armor sub-details live in the
+// *Category fields below. Kept as a closed set; use OTHER + tags for oddities.
+enum ItemType {
+  ADVENTURING_GEAR
+  WEAPON
+  ARMOR // includes shields (see ArmorCategory.SHIELD)
+  AMMUNITION
+  POTION
+  SCROLL
+  WAND
+  ROD
+  STAFF
+  RING
+  WONDROUS_ITEM
+  TOOL
+  FOOD_AND_DRINK
+  TRADE_GOOD
+  CONTAINER
+  MOUNT_OR_VEHICLE
+  TREASURE
+  OTHER
+}
+
+// 5e magic-item rarity. Mundane gear is COMMON.
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  VERY_RARE
+  LEGENDARY
+  ARTIFACT
+}
+
+enum WeaponCategory {
+  SIMPLE
+  MARTIAL
+}
+
+enum WeaponProperty {
+  AMMUNITION
+  FINESSE
+  HEAVY
+  LIGHT
+  LOADING
+  RANGE
+  REACH
+  SPECIAL
+  THROWN
+  TWO_HANDED
+  VERSATILE
+}
+
+enum ArmorCategory {
+  LIGHT
+  MEDIUM
+  HEAVY
+  SHIELD
+}
+
+enum DamageType {
+  ACID
+  BLUDGEONING
+  COLD
+  FIRE
+  FORCE
+  LIGHTNING
+  NECROTIC
+  PIERCING
+  POISON
+  PSYCHIC
+  RADIANT
+  SLASHING
+  THUNDER
+}
+
+// ---------------------------------------------------------------------------
+// Location
+// Locations nest via a
+// self-referencing parent/children relation (a region contains hamlets, a
+// town contains buildings, etc.).
+// ---------------------------------------------------------------------------
+model Location {
+  id           String  @id @default(uuid()) @db.Uuid
+  locationName String
+  description  String?
+  type         String // free text: region, country, city, town, cottage, ...
+
+  // Nested-location hierarchy (self relation)
+  parentId String?    @db.Uuid
+  parent   Location?  @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children Location[] @relation("LocationHierarchy")
+
+  // Occupants — explicit join models so each assignment can carry its own data.
+  npcPlacements     NpcPlacement[]
+  monsterPlacements MonsterPlacement[]
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId])
+}
+
+// ---------------------------------------------------------------------------
+// PlayerCharacter
+// Ability scores are modeled as six fixed integer columns; skills live in the
+// related CharacterSkill table so proficiency vs. expertise can be expressed.
+//
+// Ability-score convention: the six columns store FINAL scores (base + racial
+// ASI + level ASIs/feats). The service layer owns how a score was built; the DB
+// stores the resulting number the rest of the math depends on.
+// ---------------------------------------------------------------------------
+model PlayerCharacter {
+  id            String       @id @default(uuid()) @db.Uuid
+  characterName String
+  race          String // free text (supports homebrew)
+  subrace       String? // e.g. "High Elf"
+  alignment     Alignment?
+  size          CreatureSize @default(MEDIUM)
+
+  // Class and total level are modeled via the CharacterClass relation.
+  // Total level (and therefore proficiency bonus) is derived from the sum of
+  // class levels in the service layer — intentionally NOT stored here to avoid
+  // drift, same discipline as proficiencyBonus/initiative below.
+
+  // Progression
+  experiencePoints Int     @default(0)
+  inspiration      Boolean @default(false)
+
+  // Ability scores (final values; see convention note above)
+  strength     Int @db.SmallInt
+  dexterity    Int @db.SmallInt
+  constitution Int @db.SmallInt
+  intelligence Int @db.SmallInt
+  wisdom       Int @db.SmallInt
+  charisma     Int @db.SmallInt
+
+  // Saving-throw proficiencies (which of the six the character is proficient in)
+  strengthSaveProf     Boolean @default(false)
+  dexteritySaveProf    Boolean @default(false)
+  constitutionSaveProf Boolean @default(false)
+  intelligenceSaveProf Boolean @default(false)
+  wisdomSaveProf       Boolean @default(false)
+  charismaSaveProf     Boolean @default(false)
+
+  // Combat.
+  // NOTE: proficiencyBonus, initiative, passive scores, spell save DC, and
+  // spell attack bonus are intentionally NOT stored — derive them in the
+  // service layer to avoid drift.
+  maxHitPoints        Int
+  currentHitPoints    Int
+  temporaryHitPoints  Int @default(0)
+  hitPointMaxModifier Int @default(0) // effects that raise/lower max HP
+  armorClass          Int
+  deathSaveSuccesses  Int @default(0)
+  deathSaveFailures   Int @default(0)
+
+  // Movement (feet). Non-walking speeds are optional; null = the race lacks it.
+  speed      Int  @default(30)
+  flySpeed   Int?
+  swimSpeed  Int?
+  climbSpeed Int?
+
+  // Senses
+  darkvision Int? // range in feet; null = no darkvision
+
+  // Concentration — the spell (if any) the character is currently concentrating
+  // on. Plain FK (no relation) to keep the write path simple.
+  concentratingOnSpellId String? @db.Uuid
+
+  // Currency (5e coin types)
+  copper   Int @default(0)
+  silver   Int @default(0)
+  electrum Int @default(0)
+  gold     Int @default(0)
+  platinum Int @default(0)
+
+  description String?
+  background  String? // free text; grants proficiencies/features via Feature rows
+  traits      String?
+
+  // Ownership / campaign context (stub FKs — target tables to be defined)
+  playerId   String? @db.Uuid
+  campaignId String? @db.Uuid
+
+  // Relations
+  skills        CharacterSkill[]
+  inventory     InventoryItem[]
+  classes       CharacterClass[]
+  proficiencies Proficiency[]
+  spells        CharacterSpell[]
+  feats         CharacterFeat[]
+  features      CharacterFeature[]
+  conditions    CharacterCondition[]
+  resources     CharacterResource[]
+  spellSlots    SpellSlot[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  @@index([playerId])
+  @@index([campaignId])
+}
+
+// A class a character has levels in. Multiple rows = multiclassing.
+model CharacterClass {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  className String // "Wizard"
+  subclass  String? // "Evocation"
+  level     Int     @default(1)
+
+  // Hit dice belong to the class: die size is fixed per class, and multiclass
+  // characters have mixed pools. `hitDiceUsed` tracks spend across short rests;
+  // the max for this class equals `level`.
+  hitDieSize  Int // 6, 8, 10, 12 (a d8 -> 8)
+  hitDiceUsed Int @default(0)
+
+  // Spellcasting ability for this class (INT wizard, WIS cleric, CHA bard...).
+  // Null for non-casters. Drives spell save DC / attack bonus in the service layer.
+  spellcastingAbility Ability?
+
+  @@unique([characterId, className])
+}
+
+// Per-level spell slots. Warlock pact magic is a separate track (isPact).
+model SpellSlot {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  level  Int // 1–9
+  max    Int
+  used   Int     @default(0)
+  isPact Boolean @default(false) // Warlock pact magic slots
+
+  @@unique([characterId, level, isPact])
+}
+
+// Limited-use pools: Rage, Ki, Channel Divinity, Bardic Inspiration, Sorcery
+// Points, Superiority Dice, Lay on Hands, etc. One flexible row per feature.
+model CharacterResource {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name       String // "Rage", "Ki Points", "Channel Divinity"
+  current    Int
+  max        Int
+  rechargeOn RestType @default(LONG)
+
+  @@unique([characterId, name])
+}
+
+// Weapon / armor / tool / language / saving-throw proficiencies.
+model Proficiency {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  type String // "weapon" | "armor" | "tool" | "language" | "save"
+  name String // "Longsword", "Thieves' Tools", "Elvish", ...
+
+  @@unique([characterId, type, name])
+}
+
+// A single skill proficiency held by a character. Absence = not proficient.
+model CharacterSkill {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  skill       Skill
+  proficiency SkillProficiency @default(PROFICIENT)
+
+  @@unique([characterId, skill])
+}
+
+// ---------------------------------------------------------------------------
+// Stub tables — created so the relations above have real foreign keys.
+// Expand these as the items/economy and NPC/monster specs are fleshed out.
+// ---------------------------------------------------------------------------
+// Catalog definition of an item — created ONCE and shared. Ownership and
+// per-instance state live in InventoryItem, so a single "Shortsword" row can be
+// assigned to any number of characters, NPCs, shops, or chests.
+model Item {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // Classification
+  type    ItemType   @default(ADVENTURING_GEAR)
+  rarity  ItemRarity @default(COMMON)
+  isMagic Boolean    @default(false)
+  tags    String[] // free-text labels for search/homebrew: "silvered", "quest", ...
+
+  // Inherent property of the item definition. Whether a given owner is actually
+  // attuned is per-instance (InventoryItem.attuned); 5e caps attunement at 3 per
+  // creature — enforce that cap in the service layer.
+  requiresAttunement Boolean @default(false)
+
+  // Physical
+  weight     Float? // pounds; null = negligible / none
+  stackable  Boolean @default(false) // arrows/rations stack; a suit of plate does not
+  consumable Boolean @default(false) // potions, scrolls, rations
+
+  // Economy — a flexible REFERENCE value only, stored in COPPER (the atomic 5e
+  // coin) as an integer: no float drift, and any coin combination is
+  // representable (1 gp = 100 cp). The economy layer to come sits on top of this
+  // — shop buy/sell modifiers, supply/demand, per-region and per-merchant
+  // pricing, currency conversion. null = unpriced / priceless / quest item.
+  baseValueCp Int?
+
+  // Weapon stats — populated when type = WEAPON, otherwise null.
+  weaponCategory   WeaponCategory?
+  damageDice       String? // "1d8" (free text keeps homebrew open)
+  damageType       DamageType?
+  versatileDamage  String? // two-handed damage for versatile weapons, e.g. "1d10"
+  weaponProperties WeaponProperty[]
+  rangeNormal      Int? // feet (thrown/ranged)
+  rangeLong        Int? // feet
+
+  // Armor stats — populated when type = ARMOR (includes shields), otherwise null.
+  armorCategory       ArmorCategory?
+  baseArmorClass      Int? // for a shield, store the bonus (e.g. 2); interpret by category in the service layer
+  addDexToArmorClass  Boolean? // light/medium armor add Dex mod
+  maxDexBonus         Int? // medium armor caps at +2; null = uncapped
+  strengthRequirement Int? // heavy armor STR minimum
+  stealthDisadvantage Boolean        @default(false)
+
+  inventory InventoryItem[]
+
+  @@index([type])
+  @@index([rarity])
+}
+
+// One catalog Item assigned to one owner, with per-instance inventory state.
+// Multiple rows for the same itemId = the same item held by different owners
+// (or separate stacks held by the same owner). Exactly one owner FK should be
+// set — enforce in the service layer (and via a CHECK constraint in the migration).
+model InventoryItem {
+  id     String @id @default(uuid()) @db.Uuid
+  itemId String @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  // Owner — polymorphic via nullable FKs. Add shopId/chestId here later.
+  characterId String?          @db.Uuid
+  character   PlayerCharacter? @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  npcId       String?          @db.Uuid
+  npc         NPC?             @relation(fields: [npcId], references: [id], onDelete: Cascade)
+
+  // Per-instance state
+  quantity Int     @default(1)
+  equipped Boolean @default(false)
+  attuned  Boolean @default(false)
+
+  @@index([itemId])
+  @@index([characterId])
+  @@index([npcId])
+}
+
+model NPC {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // A reusable profile (e.g. a generic shopkeep) can appear in many locations.
+  placements NpcPlacement[]
+  inventory  InventoryItem[]
+}
+
+model Monster {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // The same monster (e.g. a giant spider) can be assigned to many locations.
+  placements MonsterPlacement[]
+}
+
+// ---------------------------------------------------------------------------
+// Explicit join models for the NPC/Monster <-> Location many-to-many.
+// Unlike an implicit relation, these let each assignment carry its own fields
+// (quantity, notes, spawn rate, etc.).
+// ---------------------------------------------------------------------------
+model NpcPlacement {
+  npcId      String @db.Uuid
+  locationId String @db.Uuid
+
+  npc      NPC      @relation(fields: [npcId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  notes String? // per-location detail, e.g. "runs the north-gate armory"
+
+  @@id([npcId, locationId])
+}
+
+model MonsterPlacement {
+  monsterId  String @db.Uuid
+  locationId String @db.Uuid
+
+  monster  Monster  @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  quantity Int     @default(1) // how many appear at this location
+  notes    String?
+
+  @@id([monsterId, locationId])
+}
+
+// ---------------------------------------------------------------------------
+// Spells, feats, features, and conditions. Catalog rows (Spell/Feat/Feature)
+// are shared definitions; the join models attach them to a character with the
+// per-character state that D&D tracks (prepared/known, active condition, etc.).
+// ---------------------------------------------------------------------------
+model Spell {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique
+  level       Int // 0 = cantrip
+  school      SpellSchool?
+  description String?
+
+  characters CharacterSpell[]
+}
+
+model CharacterSpell {
+  characterId String          @db.Uuid
+  spellId     String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  spell       Spell           @relation(fields: [spellId], references: [id], onDelete: Cascade)
+
+  known       Boolean @default(true)
+  prepared    Boolean @default(false)
+  sourceClass String? // which class granted it (multiclass casters)
+
+  @@id([characterId, spellId])
+}
+
+model Feat {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+
+  characters CharacterFeat[]
+}
+
+model CharacterFeat {
+  characterId String          @db.Uuid
+  featId      String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  feat        Feat            @relation(fields: [featId], references: [id], onDelete: Cascade)
+
+  @@id([characterId, featId])
+}
+
+// Generalized features/traits: class features (Sneak Attack), subclass
+// features, racial traits (Darkvision), background features. `source` tags the
+// origin. Feats also fit here (source = FEAT) but keep their own catalog above.
+model Feature {
+  id          String        @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  source      FeatureSource
+
+  characters CharacterFeature[]
+
+  @@unique([name, source])
+}
+
+model CharacterFeature {
+  characterId String          @db.Uuid
+  featureId   String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  feature     Feature         @relation(fields: [featureId], references: [id], onDelete: Cascade)
+
+  notes String? // per-character detail, e.g. a chosen option
+
+  @@id([characterId, featureId])
+}
+
+// Active status effects (poisoned, prone, ...). Free-text name keeps homebrew open.
+model CharacterCondition {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name  String // "poisoned", "prone", "exhaustion"
+  level Int? // for stacking conditions like exhaustion
+  notes String?
+
+  @@unique([characterId, name])
 }

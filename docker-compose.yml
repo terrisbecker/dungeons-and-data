@@ -1,0 +1,24 @@
+# Local development services. The Postgres credentials/db below intentionally
+# match the DATABASE_URL in .env (postgres:postgres@localhost:5432/dungeons_and_data).
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: dnd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dungeons_and_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - dnd-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # migrate/app should wait until the server actually accepts connections
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dungeons_and_data"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dnd-pgdata:
