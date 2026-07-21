@@ -27,6 +27,8 @@ npm run format           # prettier --write .
 npm run prisma:generate  # regenerate Prisma Client after schema edits
 npm run prisma:migrate   # prisma migrate dev — create/apply a dev migration
 
+npx tsx prisma/seed.ts   # seed 5 fully-populated test characters (re-runnable)
+
 docker compose up -d db  # start local Postgres (healthchecked, named volume)
 docker compose down      # stop it (add -v to also drop the data volume)
 ```
@@ -40,25 +42,56 @@ generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
 ## Current state (as of 2026-07-21)
 
-Early scaffolding. Working on branch `database/prisma-setup-tables`.
+Data model complete; the full layered stack for **all PlayerCharacter-related
+data** is now implemented. Working on branch `api/create-player-crud-and-routes`.
 
 **Implemented:**
 
 - `src/index.ts` — loads env, starts the HTTP server (`PORT`, default 3000).
-- `src/app.ts` — `createApp()` builds the Express app; only a `GET /health` route so far.
+- `src/app.ts` — `createApp()` mounts `express.json()`, `GET /health`, every
+  topic router, then the central error middleware (registered last).
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
 - `prisma/migrations/…_init` — **first migration, applied.** Creates all 21
   tables/enums plus two hand-added CHECK constraints: ability scores 1–30
   (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`).
+- **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
+  `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
+  `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
+  responses), and `validate.ts` (hand-rolled primitive field parsers — no
+  validation library, matching the "generic errors for now" stance).
+- **PlayerCharacter CRUD across 15 topic folders**, each with the four
+  `[topic].[layer].ts` files (flat, per the `monsters/` convention; top-level
+  URLs with `characterId` in the body/query):
+  - Hub: `characters/` (+ `characters.derived.ts`, pure derived-stats functions).
+    Soft delete via `deletedAt`; reads filter `deletedAt: null`. Two reads:
+    `GET /characters/:id` returns the lean **core** (scalars + classes + skills +
+    a computed `derived` block, what `PATCH` also returns), and
+    `GET /characters/:id/sheet` is the full **virtual character sheet** that
+    additionally joins spell slots, resources, proficiencies, conditions, spells,
+    feats, features, and inventory. See `docs/character-sheet.md`.
+  - Owned children (single `id` PK, `/topic/:id`): `character-classes/`,
+    `spell-slots/`, `character-resources/`, `character-skills/`,
+    `proficiencies/`, `character-conditions/`, `inventory-items/`.
+  - Composite-key joins (`/topic/:characterId/:otherId`): `character-spells/`,
+    `character-feats/` (pure join — no PATCH), `character-features/`.
+  - Catalogs (minimal CRUD, referenced by the joins): `items/`, `spells/`,
+    `feats/`, `features/`.
+  - Service-layer invariants: ability scores 1–30, `inventory-items` forces the
+    character owner (npcId null) and enforces the ≤3 attunement cap.
+- **Seed + docs:** `prisma/seed.ts` creates 5 fully-populated test characters
+  (re-runnable); `docs/character-sheet.md` documents the character-sheet curl.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
-- Config: `tsconfig.json`, `eslint.config.mjs`, `.prettierrc.json`, `prisma.config.ts`, `.env.example`.
+- Config: `tsconfig.json`, `eslint.config.mjs` (adds
+  `no-unused-vars` `argsIgnorePattern: "^_"`), `.prettierrc.json`,
+  `prisma.config.ts`, `.env.example`.
 
 **Not yet done:**
 
-- None of the query / service / controller / route layers exist yet — only the
-  `/health` route.
+- No layers yet for NPC / Monster / Location (and their placements) or the
+  economy/pricing layer.
+- No auth, no pagination.
 - No tests, no CI.
 
 ## Architecture — layered backend
