@@ -6,9 +6,264 @@ datasource db {
   provider = "postgresql"
 }
 
-// Example model — replace with your own.
-model Campaign {
-  id        Int      @id @default(autoincrement())
-  name      String
+// ---------------------------------------------------------------------------
+// Location
+// The largest realm down to the smallest cottage. Locations nest via a
+// self-referencing parent/children relation (a region contains hamlets, a
+// town contains buildings, etc.).
+// ---------------------------------------------------------------------------
+model Location {
+  id           String  @id @default(uuid()) @db.Uuid
+  locationName String
+  description  String?
+  type         String // free text: region, country, city, town, cottage, ...
+
+  // Nested-location hierarchy (self relation)
+  parentId String?    @db.Uuid
+  parent   Location?  @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children Location[] @relation("LocationHierarchy")
+
+  // Occupants — explicit join models so each assignment can carry its own data.
+  npcPlacements     NpcPlacement[]
+  monsterPlacements MonsterPlacement[]
+
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// PlayerCharacter
+// Ability scores are modeled as six fixed integer columns; skills live in the
+// related CharacterSkill table so proficiency vs. expertise can be expressed.
+// ---------------------------------------------------------------------------
+model PlayerCharacter {
+  id            String  @id @default(uuid()) @db.Uuid
+  characterName String
+  race          String // free text (supports homebrew)
+  subrace       String? // e.g. "High Elf"
+  alignment     String? // e.g. "Chaotic Good"
+
+  // Class is modeled as a relation (see CharacterClass) to support multiclassing.
+
+  // Progression
+  level            Int     @default(1)
+  experiencePoints Int     @default(0)
+  inspiration      Boolean @default(false)
+
+  // Ability scores
+  strength     Int
+  dexterity    Int
+  constitution Int
+  intelligence Int
+  wisdom       Int
+  charisma     Int
+
+  // Saving-throw proficiencies (which of the six the character is proficient in)
+  strengthSaveProf     Boolean @default(false)
+  dexteritySaveProf    Boolean @default(false)
+  constitutionSaveProf Boolean @default(false)
+  intelligenceSaveProf Boolean @default(false)
+  wisdomSaveProf       Boolean @default(false)
+  charismaSaveProf     Boolean @default(false)
+
+  // Combat.
+  // NOTE: proficiencyBonus, initiative, and passive scores are intentionally
+  // NOT stored — derive them in the service layer to avoid drift.
+  maxHitPoints       Int
+  currentHitPoints   Int
+  temporaryHitPoints Int     @default(0)
+  armorClass         Int
+  speed              Int     @default(30) // feet
+  hitDice            String? // e.g. "3d8"
+  deathSaveSuccesses Int     @default(0)
+  deathSaveFailures  Int     @default(0)
+
+  // Currency (5e coin types)
+  copper   Int @default(0)
+  silver   Int @default(0)
+  electrum Int @default(0)
+  gold     Int @default(0)
+  platinum Int @default(0)
+
+  description String?
+  background  String?
+  traits      String?
+
+  // Ownership / campaign context (stub FKs — target tables to be defined)
+  playerId   String? @db.Uuid
+  campaignId String? @db.Uuid
+
+  // Relations
+  skills        CharacterSkill[]
+  items         Item[]
+  classes       CharacterClass[]
+  proficiencies Proficiency[]
+  spells        CharacterSpell[]
+  feats         CharacterFeat[]
+  conditions    CharacterCondition[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A class a character has levels in. Multiple rows = multiclassing.
+model CharacterClass {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  className String // "Wizard"
+  subclass  String? // "Evocation"
+  level     Int     @default(1)
+
+  @@unique([characterId, className])
+}
+
+// Weapon / armor / tool / language / saving-throw proficiencies.
+model Proficiency {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  type String // "weapon" | "armor" | "tool" | "language" | "save"
+  name String // "Longsword", "Thieves' Tools", "Elvish", ...
+
+  @@unique([characterId, type, name])
+}
+
+// A single skill proficiency held by a character.
+model CharacterSkill {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  skill       String // e.g. "stealth", "perception"
+  proficiency String @default("proficient") // "proficient" | "expertise"
+
+  @@unique([characterId, skill])
+}
+
+// ---------------------------------------------------------------------------
+// Stub tables — created so the relations above have real foreign keys.
+// Expand these as the items/economy and NPC/monster specs are fleshed out.
+// ---------------------------------------------------------------------------
+model Item {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // Inventory state
+  quantity Int     @default(1)
+  equipped Boolean @default(false)
+  attuned  Boolean @default(false) // 5e caps attunement at 3 — enforce in service layer
+
+  // Current owner (character inventory). Will later also cover shops/chests.
+  characterId String?          @db.Uuid
+  owner       PlayerCharacter? @relation(fields: [characterId], references: [id])
+}
+
+model NPC {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // A reusable profile (e.g. a generic shopkeep) can appear in many locations.
+  placements NpcPlacement[]
+}
+
+model Monster {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+
+  // The same monster (e.g. a giant spider) can be assigned to many locations.
+  placements MonsterPlacement[]
+}
+
+// ---------------------------------------------------------------------------
+// Explicit join models for the NPC/Monster <-> Location many-to-many.
+// Unlike an implicit relation, these let each assignment carry its own fields
+// (quantity, notes, spawn rate, etc.).
+// ---------------------------------------------------------------------------
+model NpcPlacement {
+  npcId      String @db.Uuid
+  locationId String @db.Uuid
+
+  npc      NPC      @relation(fields: [npcId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  notes String? // per-location detail, e.g. "runs the north-gate armory"
+
+  @@id([npcId, locationId])
+}
+
+model MonsterPlacement {
+  monsterId  String @db.Uuid
+  locationId String @db.Uuid
+
+  monster  Monster  @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  quantity Int     @default(1) // how many appear at this location
+  notes    String?
+
+  @@id([monsterId, locationId])
+}
+
+// ---------------------------------------------------------------------------
+// Tier 3 stubs — spells, feats, and conditions. Definitions (Spell/Feat) are
+// shared catalog rows; the join models attach them to a character with the
+// per-character state that D&D tracks (prepared/known, active condition, etc.).
+// ---------------------------------------------------------------------------
+model Spell {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  level       Int // 0 = cantrip
+  school      String? // "Evocation", ...
+  description String?
+
+  characters CharacterSpell[]
+}
+
+model CharacterSpell {
+  characterId String          @db.Uuid
+  spellId     String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  spell       Spell           @relation(fields: [spellId], references: [id], onDelete: Cascade)
+
+  known       Boolean @default(true)
+  prepared    Boolean @default(false)
+  sourceClass String? // which class granted it (multiclass casters)
+
+  @@id([characterId, spellId])
+}
+
+model Feat {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String?
+
+  characters CharacterFeat[]
+}
+
+model CharacterFeat {
+  characterId String          @db.Uuid
+  featId      String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  feat        Feat            @relation(fields: [featId], references: [id], onDelete: Cascade)
+
+  @@id([characterId, featId])
+}
+
+// Active status effects (poisoned, prone, ...). Free-text name keeps homebrew open.
+model CharacterCondition {
+  id          String          @id @default(uuid()) @db.Uuid
+  characterId String          @db.Uuid
+  character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  name  String // "poisoned", "prone", "exhaustion"
+  level Int? // for stacking conditions like exhaustion
+  notes String?
+
+  @@unique([characterId, name])
 }
