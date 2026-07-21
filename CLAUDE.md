@@ -43,6 +43,7 @@ generated `migration.sql`, then `npx prisma migrate dev` to apply.
 Early scaffolding. Working on branch `database/prisma-setup-tables`.
 
 **Implemented:**
+
 - `src/index.ts` — loads env, starts the HTTP server (`PORT`, default 3000).
 - `src/app.ts` — `createApp()` builds the Express app; only a `GET /health` route so far.
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
@@ -55,6 +56,7 @@ Early scaffolding. Working on branch `database/prisma-setup-tables`.
 - Config: `tsconfig.json`, `eslint.config.mjs`, `.prettierrc.json`, `prisma.config.ts`, `.env.example`.
 
 **Not yet done:**
+
 - None of the query / service / controller / route layers exist yet — only the
   `/health` route.
 - No tests, no CI.
@@ -161,20 +163,23 @@ other columns. Compute these in the service layer:
 General best practices to lean on when building out this codebase:
 
 **ESM + TypeScript**
+
 - The project is ESM (`"type": "module"`, `module`/`moduleResolution: NodeNext`).
   **Relative imports must include the `.js` extension** even in `.ts` source
   (e.g. `import { createApp } from "./app.js";`). This is already the pattern in `src/`.
 - `strict` is on — no implicit `any`, handle `null`/`undefined` explicitly.
 
 **Express 5**
+
 - Express 5 automatically forwards rejected promises from async route handlers
   to error middleware, so `async` handlers no longer need manual `try/catch →
-  next(err)` wrappers (though explicit error handling is still fine).
+next(err)` wrappers (though explicit error handling is still fine).
 - Register a centralized error-handling middleware (`(err, req, res, next)`)
   once the controller layer exists; keep controllers thin.
 - `express.json()` is already mounted for request-body parsing.
 
 **Prisma**
+
 - Instantiate **one** `PrismaClient` for the whole app (already done in
   `src/db.ts`) — never `new PrismaClient()` per request; it exhausts DB
   connections. Import the shared `prisma` singleton.
@@ -188,11 +193,13 @@ General best practices to lean on when building out this codebase:
 - Prefer explicit `select` in the query layer so responses don't leak columns.
 
 **Postgres**
+
 - UUID PKs are the convention here; keep using `@db.Uuid`.
 - Add indexes for frequent lookup/foreign-key columns as query patterns emerge.
 - Money/coins are integers (copper…platinum) — keep currency as integers, never floats.
 
 **Config & secrets**
+
 - `.env` is gitignored; `.env.example` is the template. Never commit real secrets.
 - Env is read via `dotenv` (`import "dotenv/config"`). Fail fast on missing
   required vars (see the `DATABASE_URL` guard in `src/db.ts`).
