@@ -26,9 +26,17 @@ npm run lint:fix         # eslint . --fix
 npm run format           # prettier --write .
 npm run prisma:generate  # regenerate Prisma Client after schema edits
 npm run prisma:migrate   # prisma migrate dev — create/apply a dev migration
+
+docker compose up -d db  # start local Postgres (healthchecked, named volume)
+docker compose down      # stop it (add -v to also drop the data volume)
 ```
 
-There is no test setup yet. Copy `.env.example` to `.env` before running.
+There is no test setup yet. Copy `.env.example` to `.env`, then
+`docker compose up -d db` before running the app or migrations.
+
+**Authoring a migration with raw SQL** (e.g. CHECK constraints — Prisma has no
+`@check`): `npx prisma migrate dev --name <name> --create-only`, hand-edit the
+generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
 ## Current state (as of 2026-07-21)
 
@@ -39,18 +47,17 @@ Early scaffolding. Working on branch `database/prisma-setup-tables`.
 - `src/app.ts` — `createApp()` builds the Express app; only a `GET /health` route so far.
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
+- `prisma/migrations/…_init` — **first migration, applied.** Creates all 21
+  tables/enums plus two hand-added CHECK constraints: ability scores 1–30
+  (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`).
+- **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
+  image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs`, `.prettierrc.json`, `prisma.config.ts`, `.env.example`.
 
 **Not yet done:**
-- No Prisma **migrations** exist (`prisma/migrations/` is absent) — the schema
-  has never been applied to a database. Run `npm run prisma:migrate` to create
-  the first migration.
 - None of the query / service / controller / route layers exist yet — only the
   `/health` route.
-- No Docker, no tests, no CI.
-- Ability scores are `@db.SmallInt` but have **no CHECK (1–30) constraint** yet —
-  Prisma has no native `@check`, so add it by hand-editing the first generated
-  migration's SQL.
+- No tests, no CI.
 
 ## Architecture — layered backend
 
