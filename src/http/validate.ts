@@ -168,6 +168,16 @@ export function requireUuidField(
   return requireUuid(obj[key]);
 }
 
+export function optionalUuidField(
+  obj: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  if (obj[key] === undefined || obj[key] === null) {
+    return undefined;
+  }
+  return requireUuid(obj[key]);
+}
+
 export function optionalStringArray(
   obj: Record<string, unknown>,
   key: string,

@@ -43,7 +43,8 @@ generated `migration.sql`, then `npx prisma migrate dev` to apply.
 ## Current state (as of 2026-07-22)
 
 Data model complete; the full layered stack for **all PlayerCharacter-related
-data** is now implemented. Working on branch `api/create-player-crud-and-routes`.
+data** and **all Creature (NPC/Monster) + Location data** is now implemented.
+Working on branch `database/mosters-and-npc`.
 
 **Implemented:**
 
@@ -61,7 +62,7 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
   `InventoryItem` (`characterId` XOR `creatureId`). Regenerate the baseline the
   same way if the schema churns again pre-release: delete the migration folder,
   drop/recreate the `public` schema, `prisma migrate dev --name init
-  --create-only`, re-append the three CHECK blocks, then `prisma migrate dev`.
+--create-only`, re-append the three CHECK blocks, then `prisma migrate dev`.
 - **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
   `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
   `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
@@ -85,14 +86,36 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
   - Catalogs (referenced by the joins): `items/`, `spells/`, `feats/`,
     `features/`. `spells/`, `feats/`, and `features/` were fleshed out from
     stubs into full 5e shapes (see the Data model section for their columns).
-  - Service-layer invariants: ability scores 1–30, `inventory-items` forces the
-    character owner (creatureId null) and enforces the ≤3 attunement cap.
+  - Service-layer invariants: ability scores 1–30; `inventory-items` requires
+    exactly one owner (`characterId` XOR `creatureId`) and enforces the ≤3
+    attunement cap per owner.
+- **Creature CRUD across 6 topic folders**, mirroring the PlayerCharacter
+  conventions (flat `[topic].[layer].ts`; top-level URLs with `creatureId` in
+  the body/query):
+  - Hub: `creatures/` (+ `creatures.derived.ts`, pure derived-stats functions —
+    proficiency bonus from **CR**, not class level; no spellcasting block).
+    **Hard delete** (no `deletedAt` on Creature). Two reads mirror the character
+    hub: `GET /creatures/:id` returns the lean **core** (scalars + skills + a
+    computed `derived` block, what `PATCH` also returns), and
+    `GET /creatures/:id/sheet` is the full **stat block** that additionally
+    joins stat-block entries, damage modifiers, inventory, and placements. The
+    service normalizes `challengeRating` (Prisma `Decimal`) to a plain number.
+    See `docs/creature-stat-block.md`.
+  - Owned children (single `id` PK, `/topic/:id`, list by `?creatureId`):
+    `creature-skills/`, `stat-block-entries/`, `creature-damage-modifiers/`.
+  - Composite-key join (`/creature-placements/:creatureId/:locationId`):
+    `creature-placements/` — carries `quantity`/`notes`, so it keeps PATCH;
+    lists by `?creatureId` **or** `?locationId`.
+- **Location CRUD** (`locations/`) — standalone catalog with the self-nesting
+  hierarchy; the detail read (`GET /locations/:id`) includes `parent`/`children`
+  summaries and the creatures placed there.
 - **Seed + docs:** `prisma/seed.ts` populates **every table** (re-runnable): the
   catalog rows, 5 fully-populated test characters, a nested `Location` hierarchy
   (realm → region → town/dungeon → building), and 5 `Creature`s (2 NPCs, 3
   monsters incl. a legendary+lair Ancient Red Dragon) with stat-block entries,
   skills, damage modifiers, owned inventory, and location placements.
-  `docs/character-sheet.md` documents the character-sheet curl.
+  `docs/character-sheet.md` and `docs/creature-stat-block.md` document the
+  character-sheet and creature stat-block curls.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -101,9 +124,8 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
 
 **Not yet done:**
 
-- No layers yet for Creature (NPC/Monster) / Location (and their placements) or
-  the economy/pricing layer. The Creature data model is complete (see below);
-  its CRUD stack is not built.
+- No economy/pricing layer (shops, chests, buy/sell modifiers, currency
+  conversion) on top of the `Item.baseValueCp` catalog reference value.
 - No auth, no pagination.
 - No tests, no CI.
 
