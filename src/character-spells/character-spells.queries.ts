@@ -6,6 +6,7 @@ const select = {
   spellId: true,
   known: true,
   prepared: true,
+  alwaysPrepared: true,
   sourceClass: true,
   spell: { select: { id: true, name: true, level: true } },
 } satisfies Prisma.CharacterSpellSelect;

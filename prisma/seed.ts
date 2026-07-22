@@ -1,9 +1,11 @@
 import "dotenv/config";
 import {
+  Ability,
   ArmorCategory,
   DamageType,
   FeatureSource,
   ItemType,
+  Prisma,
   SpellSchool,
   WeaponCategory,
   WeaponProperty,
@@ -24,57 +26,186 @@ const CHARACTER_NAMES = [
 ];
 
 async function seedCatalog() {
-  const spellDefs = [
-    { name: "Fireball", level: 3, school: SpellSchool.EVOCATION },
-    { name: "Magic Missile", level: 1, school: SpellSchool.EVOCATION },
-    { name: "Mage Armor", level: 1, school: SpellSchool.ABJURATION },
-    { name: "Shield", level: 1, school: SpellSchool.ABJURATION },
-    { name: "Cure Wounds", level: 1, school: SpellSchool.EVOCATION },
-    { name: "Bless", level: 1, school: SpellSchool.ENCHANTMENT },
+  const spellDefs: Prisma.SpellCreateInput[] = [
+    {
+      name: "Fireball",
+      level: 3,
+      school: SpellSchool.EVOCATION,
+      castingTime: "1 action",
+      range: "150 feet",
+      duration: "Instantaneous",
+      verbal: true,
+      somatic: true,
+      material: true,
+      materialComponent: "a tiny ball of bat guano and sulfur",
+      savingThrow: Ability.DEX,
+      damageType: DamageType.FIRE,
+      higherLevel: "The damage increases by 1d6 for each slot level above 3rd.",
+    },
+    {
+      name: "Magic Missile",
+      level: 1,
+      school: SpellSchool.EVOCATION,
+      castingTime: "1 action",
+      range: "120 feet",
+      duration: "Instantaneous",
+      verbal: true,
+      somatic: true,
+      damageType: DamageType.FORCE,
+      higherLevel: "Creates one more dart for each slot level above 1st.",
+    },
+    {
+      name: "Mage Armor",
+      level: 1,
+      school: SpellSchool.ABJURATION,
+      castingTime: "1 action",
+      range: "Touch",
+      duration: "8 hours",
+      verbal: true,
+      somatic: true,
+      material: true,
+      materialComponent: "a piece of cured leather",
+    },
+    {
+      name: "Shield",
+      level: 1,
+      school: SpellSchool.ABJURATION,
+      castingTime: "1 reaction",
+      range: "Self",
+      duration: "1 round",
+      verbal: true,
+      somatic: true,
+    },
+    {
+      name: "Cure Wounds",
+      level: 1,
+      school: SpellSchool.EVOCATION,
+      castingTime: "1 action",
+      range: "Touch",
+      duration: "Instantaneous",
+      verbal: true,
+      somatic: true,
+      higherLevel:
+        "The healing increases by 1d8 for each slot level above 1st.",
+    },
+    {
+      name: "Bless",
+      level: 1,
+      school: SpellSchool.ENCHANTMENT,
+      castingTime: "1 action",
+      range: "30 feet",
+      duration: "Concentration, up to 1 minute",
+      concentration: true,
+      verbal: true,
+      somatic: true,
+      material: true,
+      materialComponent: "a sprinkling of holy water",
+    },
   ];
   const spells: Record<string, string> = {};
   for (const s of spellDefs) {
     const row = await prisma.spell.upsert({
       where: { name: s.name },
-      update: { level: s.level, school: s.school },
+      update: s,
       create: s,
     });
     spells[s.name] = row.id;
   }
 
-  const featDefs = [
-    { name: "Great Weapon Master", description: "Bonus attack on crit/kill." },
-    { name: "War Caster", description: "Advantage on concentration saves." },
+  const featDefs: Prisma.FeatCreateInput[] = [
+    {
+      name: "Great Weapon Master",
+      description: "Bonus attack on crit/kill.",
+    },
+    {
+      name: "War Caster",
+      description: "Advantage on concentration saves.",
+      prerequisite: "The ability to cast at least one spell",
+    },
     { name: "Alert", description: "+5 initiative; can't be surprised." },
-    { name: "Lucky", description: "Three luck points to reroll." },
+    {
+      name: "Lucky",
+      description: "Three luck points to reroll.",
+      repeatable: true,
+    },
+    {
+      name: "Resilient",
+      description: "+1 to an ability score and proficiency in its saves.",
+      grantsAbilityScoreIncrease: true,
+    },
   ];
   const feats: Record<string, string> = {};
   for (const f of featDefs) {
     const row = await prisma.feat.upsert({
       where: { name: f.name },
-      update: { description: f.description },
+      update: f,
       create: f,
     });
     feats[f.name] = row.id;
   }
 
-  const featureDefs = [
-    { name: "Darkvision", source: FeatureSource.RACE },
-    { name: "Arcane Tradition", source: FeatureSource.CLASS },
-    { name: "Fighting Style: Defense", source: FeatureSource.CLASS },
-    { name: "Second Wind", source: FeatureSource.CLASS },
-    { name: "Channel Divinity", source: FeatureSource.CLASS },
-    { name: "Disciple of Life", source: FeatureSource.SUBCLASS },
-    { name: "Rage", source: FeatureSource.CLASS },
-    { name: "Reckless Attack", source: FeatureSource.CLASS },
-    { name: "Sneak Attack", source: FeatureSource.CLASS },
-    { name: "Cunning Action", source: FeatureSource.CLASS },
+  const featureDefs: Prisma.FeatureCreateInput[] = [
+    { name: "Darkvision", source: FeatureSource.RACE, subtype: "Elf" },
+    {
+      name: "Arcane Tradition",
+      source: FeatureSource.CLASS,
+      level: 2,
+      subtype: "Wizard",
+    },
+    {
+      name: "Fighting Style: Defense",
+      source: FeatureSource.CLASS,
+      level: 1,
+      subtype: "Fighter",
+    },
+    {
+      name: "Second Wind",
+      source: FeatureSource.CLASS,
+      level: 1,
+      subtype: "Fighter",
+    },
+    {
+      name: "Channel Divinity",
+      source: FeatureSource.CLASS,
+      level: 2,
+      subtype: "Cleric",
+    },
+    {
+      name: "Disciple of Life",
+      source: FeatureSource.SUBCLASS,
+      level: 1,
+      subtype: "Life Domain",
+    },
+    {
+      name: "Rage",
+      source: FeatureSource.CLASS,
+      level: 1,
+      subtype: "Barbarian",
+    },
+    {
+      name: "Reckless Attack",
+      source: FeatureSource.CLASS,
+      level: 2,
+      subtype: "Barbarian",
+    },
+    {
+      name: "Sneak Attack",
+      source: FeatureSource.CLASS,
+      level: 1,
+      subtype: "Rogue",
+    },
+    {
+      name: "Cunning Action",
+      source: FeatureSource.CLASS,
+      level: 2,
+      subtype: "Rogue",
+    },
   ];
   const features: Record<string, string> = {};
   for (const f of featureDefs) {
     const row = await prisma.feature.upsert({
       where: { name_source: { name: f.name, source: f.source } },
-      update: {},
+      update: f,
       create: f,
     });
     features[`${f.name}`] = row.id;
@@ -203,6 +334,10 @@ async function seedCharacters(cat: Catalog) {
       darkvision: 60,
       gold: 120,
       silver: 30,
+      traits: "Speaks in riddles; always sketching arcane diagrams.",
+      ideals: "Knowledge. The pursuit of magical understanding is sacred.",
+      bonds: "My spellbook holds a decade of research I would die to protect.",
+      flaws: "I overlook danger when a new mystery presents itself.",
       classes: {
         create: [
           {
@@ -438,6 +573,7 @@ async function seedCharacters(cat: Catalog) {
           {
             spell: { connect: { id: cat.spells["Bless"] } },
             prepared: true,
+            alwaysPrepared: true, // Life Domain spell — always prepared
             sourceClass: "Cleric",
           },
         ],
@@ -490,6 +626,10 @@ async function seedCharacters(cat: Catalog) {
       speed: 40,
       darkvision: 60,
       gold: 25,
+      traits: "Loud, blunt, and quick to laugh or to anger.",
+      ideals: "Might. The strong are meant to rule the weak.",
+      bonds: "My tribe was scattered; I fight to see them whole again.",
+      flaws: "I answer nearly every insult with my axe.",
       classes: {
         create: [
           {

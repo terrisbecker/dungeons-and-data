@@ -25,6 +25,8 @@ export async function createCharacterSpellService(rawBody: unknown) {
   if (known !== undefined) data.known = known;
   const prepared = optionalBoolean(body, "prepared");
   if (prepared !== undefined) data.prepared = prepared;
+  const alwaysPrepared = optionalBoolean(body, "alwaysPrepared");
+  if (alwaysPrepared !== undefined) data.alwaysPrepared = alwaysPrepared;
   const sourceClass = optionalString(body, "sourceClass");
   if (sourceClass !== undefined) data.sourceClass = sourceClass;
   try {
@@ -58,6 +60,8 @@ export async function updateCharacterSpellService(
   if (known !== undefined) data.known = known;
   const prepared = optionalBoolean(body, "prepared");
   if (prepared !== undefined) data.prepared = prepared;
+  const alwaysPrepared = optionalBoolean(body, "alwaysPrepared");
+  if (alwaysPrepared !== undefined) data.alwaysPrepared = alwaysPrepared;
   const sourceClass = optionalString(body, "sourceClass");
   if (sourceClass !== undefined) data.sourceClass = sourceClass;
   try {

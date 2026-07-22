@@ -6,6 +6,8 @@ const select = {
   name: true,
   description: true,
   source: true,
+  level: true,
+  subtype: true,
 } satisfies Prisma.FeatureSelect;
 
 export function createFeature(data: Prisma.FeatureUncheckedCreateInput) {

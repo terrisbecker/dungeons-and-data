@@ -7,6 +7,19 @@ const select = {
   level: true,
   school: true,
   description: true,
+  castingTime: true,
+  range: true,
+  duration: true,
+  higherLevel: true,
+  verbal: true,
+  somatic: true,
+  material: true,
+  materialComponent: true,
+  concentration: true,
+  ritual: true,
+  savingThrow: true,
+  damageType: true,
+  isAttack: true,
 } satisfies Prisma.SpellSelect;
 
 export function createSpell(data: Prisma.SpellUncheckedCreateInput) {

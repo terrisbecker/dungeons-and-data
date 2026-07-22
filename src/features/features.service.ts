@@ -4,6 +4,7 @@ import { mapPrismaError } from "../http/prisma-errors.js";
 import {
   asRecord,
   optionalEnum,
+  optionalInt,
   optionalString,
   requireEnum,
   requireString,
@@ -26,6 +27,10 @@ export async function createFeatureService(rawBody: unknown) {
   };
   const description = optionalString(body, "description");
   if (description !== undefined) data.description = description;
+  const level = optionalInt(body, "level", { min: 1, max: 20 });
+  if (level !== undefined) data.level = level;
+  const subtype = optionalString(body, "subtype");
+  if (subtype !== undefined) data.subtype = subtype;
   try {
     return await createFeature(data);
   } catch (error) {
@@ -52,6 +57,10 @@ export async function updateFeatureService(id: string, rawBody: unknown) {
   if (source !== undefined) data.source = source;
   const description = optionalString(body, "description");
   if (description !== undefined) data.description = description;
+  const level = optionalInt(body, "level", { min: 1, max: 20 });
+  if (level !== undefined) data.level = level;
+  const subtype = optionalString(body, "subtype");
+  if (subtype !== undefined) data.subtype = subtype;
   try {
     return await updateFeature(id, data);
   } catch (error) {

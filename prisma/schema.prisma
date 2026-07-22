@@ -272,7 +272,13 @@ model PlayerCharacter {
 
   description String?
   background  String? // free text; grants proficiencies/features via Feature rows
-  traits      String?
+
+  // The four 5e roleplay boxes. `traits` holds personality traits; ideals,
+  // bonds, and flaws are their own free-text fields on the character sheet.
+  traits String?
+  ideals String?
+  bonds  String?
+  flaws  String?
 
   // Ownership / campaign context (stub FKs — target tables to be defined)
   playerId   String? @db.Uuid
@@ -518,6 +524,27 @@ model Spell {
   school      SpellSchool?
   description String?
 
+  // Casting details — free text keeps homebrew open.
+  castingTime String? // "1 action", "1 bonus action", "1 minute"
+  range       String? // "60 feet", "Self", "Touch"
+  duration    String? // "Instantaneous", "Concentration, up to 1 minute"
+  higherLevel String? // "At Higher Levels" scaling text
+
+  // Components (V/S/M). `materialComponent` holds the material text when material.
+  verbal            Boolean @default(false)
+  somatic           Boolean @default(false)
+  material          Boolean @default(false)
+  materialComponent String? // "a tiny ball of bat guano and sulfur"
+
+  concentration Boolean @default(false)
+  ritual        Boolean @default(false)
+
+  // Structured combat hooks for the future derived/combat layer. Null when the
+  // spell forces no save / deals no typed damage; `isAttack` flags spell attacks.
+  savingThrow Ability?
+  damageType  DamageType?
+  isAttack    Boolean     @default(false)
+
   characters CharacterSpell[]
 }
 
@@ -527,9 +554,12 @@ model CharacterSpell {
   character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
   spell       Spell           @relation(fields: [spellId], references: [id], onDelete: Cascade)
 
-  known       Boolean @default(true)
-  prepared    Boolean @default(false)
-  sourceClass String? // which class granted it (multiclass casters)
+  known          Boolean @default(true)
+  prepared       Boolean @default(false)
+  // Domain/oath/subclass spells that are always prepared and do not count
+  // against the caster's prepared-spell limit.
+  alwaysPrepared Boolean @default(false)
+  sourceClass    String? // which class granted it (multiclass casters)
 
   @@id([characterId, spellId])
 }
@@ -538,6 +568,12 @@ model Feat {
   id          String  @id @default(uuid()) @db.Uuid
   name        String  @unique
   description String?
+
+  prerequisite String? // "Strength 13 or higher", "Ability to cast a spell"
+  repeatable   Boolean @default(false) // can be taken more than once
+
+  // Half-feats grant a +1 ability score increase alongside their benefit.
+  grantsAbilityScoreIncrease Boolean @default(false)
 
   characters CharacterFeat[]
 }
@@ -559,6 +595,9 @@ model Feature {
   name        String
   description String?
   source      FeatureSource
+
+  level   Int? // class level the feature is gained at; null for racial/background
+  subtype String? // free-text origin detail: "Wizard", "School of Evocation", "Elf"
 
   characters CharacterFeature[]
 

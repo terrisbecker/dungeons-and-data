@@ -5,6 +5,9 @@ const select = {
   id: true,
   name: true,
   description: true,
+  prerequisite: true,
+  repeatable: true,
+  grantsAbilityScoreIncrease: true,
 } satisfies Prisma.FeatSelect;
 
 export function createFeat(data: Prisma.FeatUncheckedCreateInput) {

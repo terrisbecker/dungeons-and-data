@@ -86,6 +86,9 @@ function parseOptionalFields(
   set("description", optionalString(body, "description"));
   set("background", optionalString(body, "background"));
   set("traits", optionalString(body, "traits"));
+  set("ideals", optionalString(body, "ideals"));
+  set("bonds", optionalString(body, "bonds"));
+  set("flaws", optionalString(body, "flaws"));
   set("playerId", optionalString(body, "playerId"));
   set("campaignId", optionalString(body, "campaignId"));
 

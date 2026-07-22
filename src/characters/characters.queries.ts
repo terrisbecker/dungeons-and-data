@@ -45,6 +45,9 @@ const characterScalarSelect = {
   description: true,
   background: true,
   traits: true,
+  ideals: true,
+  bonds: true,
+  flaws: true,
   playerId: true,
   campaignId: true,
   createdAt: true,
@@ -117,6 +120,7 @@ const characterSheetSelect = {
     select: {
       known: true,
       prepared: true,
+      alwaysPrepared: true,
       sourceClass: true,
       spell: {
         select: { id: true, name: true, level: true, school: true },

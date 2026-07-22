@@ -75,8 +75,9 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
     `proficiencies/`, `character-conditions/`, `inventory-items/`.
   - Composite-key joins (`/topic/:characterId/:otherId`): `character-spells/`,
     `character-feats/` (pure join — no PATCH), `character-features/`.
-  - Catalogs (minimal CRUD, referenced by the joins): `items/`, `spells/`,
-    `feats/`, `features/`.
+  - Catalogs (referenced by the joins): `items/`, `spells/`, `feats/`,
+    `features/`. `spells/`, `feats/`, and `features/` were fleshed out from
+    stubs into full 5e shapes (see the Data model section for their columns).
   - Service-layer invariants: ability scores 1–30, `inventory-items` forces the
     character owner (npcId null) and enforces the ≤3 attunement cap.
 - **Seed + docs:** `prisma/seed.ts` creates 5 fully-populated test characters
@@ -132,9 +133,10 @@ Models currently defined:
   (stored as **final** values, post-racial/ASI); per-save proficiency booleans;
   combat (HP, `hitPointMaxModifier`, AC, death saves); movement
   (`speed`/`flySpeed`/`swimSpeed`/`climbSpeed`) and `darkvision`; concentration
-  pointer; currency (5e coin types); `deletedAt` soft delete. Related to skills,
-  items, classes, proficiencies, spells, feats, features, conditions, resources,
-  and spell slots.
+  pointer; currency (5e coin types); the four roleplay boxes
+  (`traits`/`ideals`/`bonds`/`flaws`); `deletedAt` soft delete. Related to
+  skills, items, classes, proficiencies, spells, feats, features, conditions,
+  resources, and spell slots.
 - **CharacterClass** — one row per class a character has levels in (supports
   **multiclassing**); carries `hitDieSize`/`hitDiceUsed` (hit dice are
   per-class) and `spellcastingAbility`; unique on `(characterId, className)`.
@@ -167,10 +169,20 @@ Models currently defined:
 - **NPC**, **Monster** — reusable profiles placed into locations.
 - **NpcPlacement**, **MonsterPlacement** — explicit M2M join models between
   NPC/Monster and Location, carrying per-placement data (notes, quantity).
-- **Spell** / **CharacterSpell**, **Feat** / **CharacterFeat** — shared catalog
-  rows joined to characters with per-character state (known/prepared, source class).
+- **Spell** / **CharacterSpell** — the `Spell` catalog carries full 5e spell
+  data: `level`/`school`, casting details (`castingTime`/`range`/`duration`/
+  `higherLevel`), V/S/M components (`verbal`/`somatic`/`material`/
+  `materialComponent`), `concentration`/`ritual` flags, and structured combat
+  hooks for the future combat layer (`savingThrow` `Ability?`, `damageType`
+  `DamageType?`, `isAttack`). `CharacterSpell` holds per-character state
+  (`known`/`prepared`/`alwaysPrepared` for domain/oath spells/`sourceClass`).
+- **Feat** / **CharacterFeat** — the `Feat` catalog carries `prerequisite`,
+  `repeatable`, and `grantsAbilityScoreIncrease` (half-feat marker);
+  `CharacterFeat` is a pure join.
 - **Feature** / **CharacterFeature** — generalized class/subclass/racial/
-  background features tagged by `FeatureSource`; unique on `(name, source)`.
+  background features tagged by `FeatureSource`, with `level` (gained-at level;
+  null for racial/background) and free-text `subtype` (e.g. "Wizard", "School of
+  Evocation"); unique on `(name, source)`.
 - **CharacterCondition** — active status effects (poisoned, prone, exhaustion),
   with optional `level` for stacking.
 
