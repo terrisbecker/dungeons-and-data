@@ -5,7 +5,7 @@ const select = {
   id: true,
   itemId: true,
   characterId: true,
-  npcId: true,
+  creatureId: true,
   quantity: true,
   equipped: true,
   attuned: true,

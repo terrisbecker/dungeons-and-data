@@ -2,20 +2,27 @@ import "dotenv/config";
 import {
   Ability,
   ArmorCategory,
+  CreatureKind,
+  CreatureSize,
+  CreatureType,
+  DamageModifierKind,
   DamageType,
   FeatureSource,
   ItemType,
   Prisma,
   SpellSchool,
+  StatBlockEntryCategory,
   WeaponCategory,
   WeaponProperty,
 } from "@prisma/client";
 import { prisma } from "../src/db.js";
 
-// Seeds five fully-featured test characters (plus the catalog rows they
-// reference) so GET /characters/:id returns a populated "character sheet".
-// Re-runnable: existing characters with these names are deleted first, which
-// cascades to all their owned rows.
+// Seeds a fully-populated test dataset that touches EVERY table: five
+// character sheets (+ the catalog rows they reference), a nested Location
+// hierarchy, and a roster of NPCs/monsters (Creatures) with full stat blocks,
+// skills, damage modifiers, owned loot, and location placements.
+// Re-runnable: rows created here are deleted (by name) first, cascading to all
+// their owned children, so `npx tsx prisma/seed.ts` can be run repeatedly.
 
 const CHARACTER_NAMES = [
   "Aria Nightbreeze",
@@ -23,6 +30,26 @@ const CHARACTER_NAMES = [
   "Luna Silverleaf",
   "Grommash Skullcrusher",
   "Pip Thistledown",
+];
+
+// Every location name the seed creates. The Location self-relation uses
+// onDelete: SetNull (not Cascade), so deleting only the root would orphan its
+// descendants rather than remove them — delete the whole set by name instead.
+const LOCATION_NAMES = [
+  "The Kingdom of Aldermere",
+  "Silverpine Forest",
+  "Thornwick",
+  "The Gilded Anvil",
+  "Emberpeak Mountains",
+  "Dragon's Maw Cavern",
+];
+
+const CREATURE_NAMES = [
+  "Seraphina Dawnbringer",
+  "Grumblin Cogwhistle",
+  "Ancient Red Dragon",
+  "Goblin Cutthroat",
+  "Shambling Zombie",
 ];
 
 async function seedCatalog() {
@@ -793,12 +820,519 @@ async function seedCharacters(cat: Catalog) {
   });
 }
 
+// Builds a nested Location hierarchy (realm -> region -> town -> building)
+// using the self-referencing parent/children relation. Returns a name->id map
+// so creatures can be placed into specific locations.
+async function seedLocations() {
+  const realm = await prisma.location.create({
+    data: {
+      locationName: "The Kingdom of Aldermere",
+      type: "realm",
+      description: "A temperate human kingdom ringed by forest and mountains.",
+      children: {
+        create: [
+          {
+            locationName: "Silverpine Forest",
+            type: "region",
+            description: "Ancient pine woods, home to elves and worse.",
+            children: {
+              create: [
+                {
+                  locationName: "Thornwick",
+                  type: "town",
+                  description: "A walled trading town on the forest's edge.",
+                  children: {
+                    create: [
+                      {
+                        locationName: "The Gilded Anvil",
+                        type: "building",
+                        description: "The town smithy and general store.",
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            locationName: "Emberpeak Mountains",
+            type: "region",
+            description: "Volcanic peaks veined with old dwarven roads.",
+            children: {
+              create: [
+                {
+                  locationName: "Dragon's Maw Cavern",
+                  type: "dungeon",
+                  description:
+                    "A lava-lit cave system and ancient wyrm's lair.",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  // Flatten the tree we just made into a name -> id lookup.
+  const all = await prisma.location.findMany({
+    select: { id: true, locationName: true },
+  });
+  const byName: Record<string, string> = {};
+  for (const l of all) {
+    byName[l.locationName] = l.id;
+  }
+  // Touch `realm` so the create result is used (root of the tree above).
+  byName["The Kingdom of Aldermere"] = realm.id;
+  return byName;
+}
+
+type Locations = Awaited<ReturnType<typeof seedLocations>>;
+
+// Seeds the Creature roster (NPCs + monsters) with the full stat-block graph:
+// StatBlockEntry rows across categories, CreatureSkill, CreatureDamageModifier,
+// creature-owned InventoryItem, and CreaturePlacement links into locations.
+async function seedCreatures(cat: Catalog, loc: Locations) {
+  // 1) Seraphina — NPC, the town smith/cleric who runs The Gilded Anvil.
+  await prisma.creature.create({
+    data: {
+      kind: CreatureKind.NPC,
+      name: "Seraphina Dawnbringer",
+      description: "A silver-haired half-elf smith blessed by the Dawnfather.",
+      size: CreatureSize.MEDIUM,
+      creatureType: CreatureType.HUMANOID,
+      typeTags: ["half-elf"],
+      alignment: "LG",
+      armorClass: 18,
+      armorClassNote: "chain mail, shield",
+      hitPoints: 39,
+      hitDice: "6d8 + 12",
+      speed: 30,
+      strength: 16,
+      dexterity: 10,
+      constitution: 14,
+      intelligence: 12,
+      wisdom: 16,
+      charisma: 14,
+      wisdomSaveProf: true,
+      charismaSaveProf: true,
+      darkvision: 60,
+      languages: "Common, Elvish, Celestial",
+      occupation: "Blacksmith & Cleric",
+      faction: "Order of the Dawn",
+      race: "Half-Elf",
+      skills: {
+        create: [
+          { skill: "MEDICINE", proficiency: "PROFICIENT" },
+          { skill: "INSIGHT", proficiency: "PROFICIENT" },
+          { skill: "PERSUASION", proficiency: "EXPERTISE" },
+        ],
+      },
+      entries: {
+        create: [
+          {
+            category: StatBlockEntryCategory.TRAIT,
+            name: "Spellcasting",
+            description:
+              "Seraphina is a 6th-level spellcaster (Wisdom; save DC 14). She has cure wounds, bless, and spiritual weapon prepared.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.ACTION,
+            name: "Warhammer",
+            description:
+              "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 8 (1d8 + 3) bludgeoning damage.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.REACTION,
+            name: "Protective Blessing",
+            description:
+              "When an ally within 30 ft. is hit, Seraphina grants them a +2 bonus to AC against that attack.",
+            sortOrder: 0,
+          },
+        ],
+      },
+      inventory: {
+        create: [
+          { item: { connect: { id: cat.items["Mace"] } }, equipped: true },
+          {
+            item: { connect: { id: cat.items["Chain Mail"] } },
+            equipped: true,
+          },
+          { item: { connect: { id: cat.items["Shield"] } }, equipped: true },
+        ],
+      },
+      placements: {
+        create: [
+          {
+            location: { connect: { id: loc["The Gilded Anvil"] } },
+            quantity: 1,
+            notes: "Works the forge from dawn till dusk.",
+          },
+        ],
+      },
+    },
+  });
+
+  // 2) Grumblin — NPC gnome tinkerer/shopkeeper in Thornwick.
+  await prisma.creature.create({
+    data: {
+      kind: CreatureKind.NPC,
+      name: "Grumblin Cogwhistle",
+      description: "A soot-stained gnome who sells potions and oddments.",
+      size: CreatureSize.SMALL,
+      creatureType: CreatureType.HUMANOID,
+      typeTags: ["gnome"],
+      alignment: "CN",
+      armorClass: 12,
+      hitPoints: 22,
+      hitDice: "5d6 + 5",
+      speed: 25,
+      strength: 8,
+      dexterity: 14,
+      constitution: 12,
+      intelligence: 17,
+      wisdom: 11,
+      charisma: 13,
+      intelligenceSaveProf: true,
+      darkvision: 60,
+      languages: "Common, Gnomish",
+      occupation: "Alchemist & Merchant",
+      faction: "Thornwick Traders' Guild",
+      race: "Rock Gnome",
+      skills: {
+        create: [
+          { skill: "ARCANA", proficiency: "PROFICIENT" },
+          { skill: "SLEIGHT_OF_HAND", proficiency: "PROFICIENT" },
+        ],
+      },
+      entries: {
+        create: [
+          {
+            category: StatBlockEntryCategory.TRAIT,
+            name: "Gnome Cunning",
+            description:
+              "Advantage on Intelligence, Wisdom, and Charisma saving throws against magic.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.ACTION,
+            name: "Dagger",
+            description:
+              "Melee or Ranged Weapon Attack: +4 to hit, reach 5 ft. or range 20/60 ft., one target. Hit: 4 (1d4 + 2) piercing damage.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.BONUS_ACTION,
+            name: "Toss Alchemist's Fire",
+            description:
+              "Grumblin hurls a flask at a point within 20 ft.; each creature within 5 ft. takes 3 (1d6) fire damage.",
+            sortOrder: 0,
+          },
+        ],
+      },
+      inventory: {
+        create: [
+          { item: { connect: { id: cat.items["Dagger"] } }, equipped: true },
+          {
+            item: { connect: { id: cat.items["Potion of Healing"] } },
+            quantity: 8,
+          },
+        ],
+      },
+      placements: {
+        create: [
+          {
+            location: { connect: { id: loc["Thornwick"] } },
+            quantity: 1,
+            notes: "Runs a cluttered shop off the market square.",
+          },
+        ],
+      },
+    },
+  });
+
+  // 3) Ancient Red Dragon — MONSTER, legendary + lair, full stat block.
+  await prisma.creature.create({
+    data: {
+      kind: CreatureKind.MONSTER,
+      name: "Ancient Red Dragon",
+      description: "A colossal wyrm wreathed in smoke and molten fury.",
+      size: CreatureSize.GARGANTUAN,
+      creatureType: CreatureType.DRAGON,
+      alignment: "CE",
+      armorClass: 22,
+      armorClassNote: "natural armor",
+      hitPoints: 546,
+      hitDice: "28d20 + 252",
+      speed: 40,
+      flySpeed: 80,
+      climbSpeed: 40,
+      strength: 30,
+      dexterity: 10,
+      constitution: 29,
+      intelligence: 18,
+      wisdom: 15,
+      charisma: 23,
+      dexteritySaveProf: true,
+      constitutionSaveProf: true,
+      wisdomSaveProf: true,
+      charismaSaveProf: true,
+      blindsight: 60,
+      darkvision: 120,
+      languages: "Common, Draconic",
+      conditionImmunities: [],
+      challengeRating: "24",
+      experiencePoints: 62000,
+      legendaryActionsPerRound: 3,
+      hasLair: true,
+      environment: ["Mountain"],
+      source: "Monster Manual",
+      skills: {
+        create: [
+          { skill: "PERCEPTION", proficiency: "EXPERTISE" },
+          { skill: "STEALTH", proficiency: "PROFICIENT" },
+        ],
+      },
+      damageModifiers: {
+        create: [
+          { kind: DamageModifierKind.IMMUNITY, damageType: DamageType.FIRE },
+        ],
+      },
+      entries: {
+        create: [
+          {
+            category: StatBlockEntryCategory.TRAIT,
+            name: "Legendary Resistance (3/Day)",
+            description:
+              "If the dragon fails a saving throw, it can choose to succeed instead.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.ACTION,
+            name: "Multiattack",
+            description:
+              "The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.ACTION,
+            name: "Fire Breath (Recharge 5–6)",
+            description:
+              "The dragon exhales fire in a 90-foot cone. Each creature makes a DC 24 Dexterity save, taking 91 (26d6) fire damage on a failure, or half as much on a success.",
+            sortOrder: 1,
+          },
+          {
+            category: StatBlockEntryCategory.LEGENDARY_ACTION,
+            name: "Tail Attack",
+            description: "The dragon makes a tail attack.",
+            sortOrder: 0,
+            legendaryCost: 1,
+          },
+          {
+            category: StatBlockEntryCategory.LEGENDARY_ACTION,
+            name: "Wing Attack (Costs 2 Actions)",
+            description:
+              "The dragon beats its wings. Each creature within 15 ft. must succeed on a DC 25 Dexterity save or take 15 (2d6 + 8) bludgeoning damage and be knocked prone.",
+            sortOrder: 1,
+            legendaryCost: 2,
+          },
+          {
+            category: StatBlockEntryCategory.LAIR_ACTION,
+            name: "Magma Eruption",
+            description:
+              "Magma erupts from a point on the ground the dragon can see within 120 ft.; each creature within 20 ft. makes a DC 15 Dexterity save or takes 21 (6d6) fire damage.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.REGIONAL_EFFECT,
+            name: "Sulfurous Haze",
+            description:
+              "The region within 6 miles of the lair is wreathed in ash and smoke, lightly obscuring the air.",
+            sortOrder: 0,
+          },
+        ],
+      },
+      inventory: {
+        create: [
+          {
+            item: { connect: { id: cat.items["Wand of Magic Missiles"] } },
+            quantity: 1,
+          },
+          {
+            item: { connect: { id: cat.items["Potion of Healing"] } },
+            quantity: 12,
+          },
+        ],
+      },
+      placements: {
+        create: [
+          {
+            location: { connect: { id: loc["Dragon's Maw Cavern"] } },
+            quantity: 1,
+            notes: "Sleeps atop a mound of gold in the deepest chamber.",
+          },
+        ],
+      },
+    },
+  });
+
+  // 4) Goblin — low-CR MONSTER, packs the forest.
+  await prisma.creature.create({
+    data: {
+      kind: CreatureKind.MONSTER,
+      name: "Goblin Cutthroat",
+      description: "A small, wiry raider with a wicked scimitar.",
+      size: CreatureSize.SMALL,
+      creatureType: CreatureType.HUMANOID,
+      typeTags: ["goblinoid"],
+      alignment: "NE",
+      armorClass: 15,
+      armorClassNote: "leather armor, shield",
+      hitPoints: 7,
+      hitDice: "2d6",
+      speed: 30,
+      strength: 8,
+      dexterity: 14,
+      constitution: 10,
+      intelligence: 10,
+      wisdom: 8,
+      charisma: 8,
+      darkvision: 60,
+      languages: "Common, Goblin",
+      challengeRating: "0.25",
+      experiencePoints: 50,
+      environment: ["Forest", "Underdark"],
+      source: "Monster Manual",
+      skills: {
+        create: [{ skill: "STEALTH", proficiency: "EXPERTISE" }],
+      },
+      entries: {
+        create: [
+          {
+            category: StatBlockEntryCategory.BONUS_ACTION,
+            name: "Nimble Escape",
+            description: "The goblin takes the Disengage or Hide action.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.ACTION,
+            name: "Scimitar",
+            description:
+              "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage.",
+            sortOrder: 0,
+          },
+        ],
+      },
+      inventory: {
+        create: [
+          {
+            item: { connect: { id: cat.items["Leather Armor"] } },
+            equipped: true,
+          },
+        ],
+      },
+      placements: {
+        create: [
+          {
+            location: { connect: { id: loc["Silverpine Forest"] } },
+            quantity: 8,
+            notes: "A raiding band that ambushes the forest road.",
+          },
+        ],
+      },
+    },
+  });
+
+  // 5) Zombie — MONSTER with a poison immunity and condition immunity.
+  await prisma.creature.create({
+    data: {
+      kind: CreatureKind.MONSTER,
+      name: "Shambling Zombie",
+      description: "A rotting corpse animated by dark magic.",
+      size: CreatureSize.MEDIUM,
+      creatureType: CreatureType.UNDEAD,
+      alignment: "NE",
+      alignmentNote: "neutral evil",
+      armorClass: 8,
+      hitPoints: 22,
+      hitDice: "3d8 + 9",
+      speed: 20,
+      strength: 13,
+      dexterity: 6,
+      constitution: 16,
+      intelligence: 3,
+      wisdom: 6,
+      charisma: 5,
+      wisdomSaveProf: true,
+      darkvision: 60,
+      languages: "understands the languages it knew in life but can't speak",
+      conditionImmunities: ["poisoned"],
+      challengeRating: "0.25",
+      experiencePoints: 50,
+      environment: ["Urban", "Dungeon"],
+      source: "Monster Manual",
+      damageModifiers: {
+        create: [
+          { kind: DamageModifierKind.IMMUNITY, damageType: DamageType.POISON },
+          {
+            kind: DamageModifierKind.VULNERABILITY,
+            damageType: DamageType.RADIANT,
+            note: "turned or seared by holy power",
+          },
+        ],
+      },
+      entries: {
+        create: [
+          {
+            category: StatBlockEntryCategory.TRAIT,
+            name: "Undead Fortitude",
+            description:
+              "If damage reduces the zombie to 0 HP, it makes a Constitution save (DC 5 + damage) to drop to 1 HP instead, unless the damage is radiant or from a critical hit.",
+            sortOrder: 0,
+          },
+          {
+            category: StatBlockEntryCategory.ACTION,
+            name: "Slam",
+            description:
+              "Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) bludgeoning damage.",
+            sortOrder: 0,
+          },
+        ],
+      },
+      placements: {
+        create: [
+          {
+            location: { connect: { id: loc["Dragon's Maw Cavern"] } },
+            quantity: 4,
+            notes: "Shuffle through the outer tunnels as guardians.",
+          },
+        ],
+      },
+    },
+  });
+}
+
 async function main() {
+  // Clear previously seeded rows (cascades to owned children). Creatures cascade
+  // to entries/skills/damage modifiers/inventory/placements; characters cascade
+  // to their owned rows. Locations are deleted by the full name set because the
+  // hierarchy self-relation is SetNull, not Cascade (see LOCATION_NAMES).
   await prisma.playerCharacter.deleteMany({
     where: { characterName: { in: CHARACTER_NAMES } },
   });
+  await prisma.creature.deleteMany({
+    where: { name: { in: CREATURE_NAMES } },
+  });
+  await prisma.location.deleteMany({
+    where: { locationName: { in: LOCATION_NAMES } },
+  });
+
   const catalog = await seedCatalog();
   await seedCharacters(catalog);
+  const locations = await seedLocations();
+  await seedCreatures(catalog, locations);
 
   const created = await prisma.playerCharacter.findMany({
     where: { characterName: { in: CHARACTER_NAMES } },
@@ -808,6 +1342,25 @@ async function main() {
   console.log("Seeded characters:");
   for (const c of created) {
     console.log(`  ${c.id}  ${c.characterName}`);
+  }
+
+  const creatures = await prisma.creature.findMany({
+    where: { name: { in: CREATURE_NAMES } },
+    select: { id: true, name: true, kind: true },
+    orderBy: { name: "asc" },
+  });
+  console.log("Seeded creatures:");
+  for (const c of creatures) {
+    console.log(`  ${c.id}  [${c.kind}] ${c.name}`);
+  }
+
+  const locs = await prisma.location.findMany({
+    select: { id: true, locationName: true },
+    orderBy: { locationName: "asc" },
+  });
+  console.log("Seeded locations:");
+  for (const l of locs) {
+    console.log(`  ${l.id}  ${l.locationName}`);
   }
 }
 

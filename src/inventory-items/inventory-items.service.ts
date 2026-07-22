@@ -30,7 +30,7 @@ async function assertAttunementCapacity(
 
 export async function createInventoryItemService(rawBody: unknown) {
   const body = asRecord(rawBody);
-  // Owner is forced to the character here; npcId is left null so the DB's
+  // Owner is forced to the character here; creatureId is left null so the DB's
   // exactly-one-owner CHECK is satisfied.
   const characterId = requireUuidField(body, "characterId");
   const data: Prisma.InventoryItemUncheckedCreateInput = {

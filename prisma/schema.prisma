@@ -169,6 +169,52 @@ enum DamageType {
   THUNDER
 }
 
+// --- Creature (NPC / Monster) enums --------------------------------------
+// NPCs and monsters share an identical stat block, so they are one `Creature`
+// table discriminated by `kind`. See the Creature model below.
+enum CreatureKind {
+  NPC
+  MONSTER
+}
+
+// The 5e creature types. Homebrew/parenthetical subtypes ("goblinoid",
+// "shapechanger") stay free-text on `Creature.typeTags`.
+enum CreatureType {
+  ABERRATION
+  BEAST
+  CELESTIAL
+  CONSTRUCT
+  DRAGON
+  ELEMENTAL
+  FEY
+  FIEND
+  GIANT
+  HUMANOID
+  MONSTROSITY
+  OOZE
+  PLANT
+  UNDEAD
+}
+
+// One enum drives a single polymorphic StatBlockEntry table (traits, actions,
+// legendary/lair actions, etc.) instead of a table per section.
+enum StatBlockEntryCategory {
+  TRAIT
+  ACTION
+  BONUS_ACTION
+  REACTION
+  LEGENDARY_ACTION
+  MYTHIC_ACTION
+  LAIR_ACTION
+  REGIONAL_EFFECT
+}
+
+enum DamageModifierKind {
+  VULNERABILITY
+  RESISTANCE
+  IMMUNITY
+}
+
 // ---------------------------------------------------------------------------
 // Location
 // Locations nest via a
@@ -186,9 +232,8 @@ model Location {
   parent   Location?  @relation("LocationHierarchy", fields: [parentId], references: [id])
   children Location[] @relation("LocationHierarchy")
 
-  // Occupants — explicit join models so each assignment can carry its own data.
-  npcPlacements     NpcPlacement[]
-  monsterPlacements MonsterPlacement[]
+  // Occupants — an explicit join model so each assignment can carry its own data.
+  creaturePlacements CreaturePlacement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -454,10 +499,10 @@ model ArmorStats {
 
   armorCategory       ArmorCategory
   baseArmorClass      Int // for a shield, store the bonus (e.g. 2); interpret by category in the service layer
-  addDexToArmorClass  Boolean @default(false) // light/medium armor add Dex mod
+  addDexToArmorClass  Boolean       @default(false) // light/medium armor add Dex mod
   maxDexBonus         Int? // medium armor caps at +2; null = uncapped
   strengthRequirement Int? // heavy armor STR minimum
-  stealthDisadvantage Boolean @default(false)
+  stealthDisadvantage Boolean       @default(false)
 }
 
 // One catalog Item assigned to one owner, with per-instance inventory state.
@@ -472,8 +517,8 @@ model InventoryItem {
   // Owner — polymorphic via nullable FKs. Add shopId/chestId here later.
   characterId String?          @db.Uuid
   character   PlayerCharacter? @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  npcId       String?          @db.Uuid
-  npc         NPC?             @relation(fields: [npcId], references: [id], onDelete: Cascade)
+  creatureId  String?          @db.Uuid
+  creature    Creature?        @relation(fields: [creatureId], references: [id], onDelete: Cascade)
 
   // Per-instance state
   quantity Int     @default(1)
@@ -482,56 +527,169 @@ model InventoryItem {
 
   @@index([itemId])
   @@index([characterId])
-  @@index([npcId])
-}
-
-model NPC {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-
-  // A reusable profile (e.g. a generic shopkeep) can appear in many locations.
-  placements NpcPlacement[]
-  inventory  InventoryItem[]
-}
-
-model Monster {
-  id          String  @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-
-  // The same monster (e.g. a giant spider) can be assigned to many locations.
-  placements MonsterPlacement[]
+  @@index([creatureId])
 }
 
 // ---------------------------------------------------------------------------
-// Explicit join models for the NPC/Monster <-> Location many-to-many.
-// Unlike an implicit relation, these let each assignment carry its own fields
+// Creature — the reusable NPC / Monster profile.
+// NPCs and monsters share an identical 5e stat block, so they are one table
+// discriminated by `kind`; NPC-only and Monster-only fields sit alongside as
+// nullable columns. Mirrors PlayerCharacter conventions: `@db.SmallInt` ability
+// scores (final values), six save-proficiency booleans, createdAt/updatedAt.
+//
+// Derived-not-stored discipline (same as PlayerCharacter): proficiency bonus
+// (from CR), save/skill bonuses (ability mod + prof), passive Perception, and
+// spell math are computed in the service layer, never columns here.
+// ---------------------------------------------------------------------------
+model Creature {
+  id   String       @id @default(uuid()) @db.Uuid
+  kind CreatureKind // NPC | MONSTER — discriminator
+
+  name        String
+  description String?
+
+  // Header
+  size          CreatureSize  @default(MEDIUM)
+  creatureType  CreatureType? // aberration, beast, ... (5e type)
+  typeTags      String[] // free-text subtypes: "goblinoid", "shapechanger"
+  alignment     Alignment?
+  alignmentNote String? // "unaligned", "any evil alignment" — beyond the enum
+
+  // Defense
+  armorClass     Int
+  armorClassNote String? // "natural armor", "18 with mage armor"
+  hitPoints      Int // average HP
+  hitDice        String? // "18d10 + 36"
+
+  // Movement (feet). null = the creature lacks that mode.
+  speed       Int     @default(30)
+  flySpeed    Int?
+  swimSpeed   Int?
+  climbSpeed  Int?
+  burrowSpeed Int?
+  hover       Boolean @default(false)
+
+  // Ability scores (final values)
+  strength     Int @db.SmallInt
+  dexterity    Int @db.SmallInt
+  constitution Int @db.SmallInt
+  intelligence Int @db.SmallInt
+  wisdom       Int @db.SmallInt
+  charisma     Int @db.SmallInt
+
+  // Saving-throw proficiencies (the +N bonus is derived, not stored)
+  strengthSaveProf     Boolean @default(false)
+  dexteritySaveProf    Boolean @default(false)
+  constitutionSaveProf Boolean @default(false)
+  intelligenceSaveProf Boolean @default(false)
+  wisdomSaveProf       Boolean @default(false)
+  charismaSaveProf     Boolean @default(false)
+
+  // Senses (range in feet; null = absent). Passive Perception is derived.
+  darkvision  Int?
+  blindsight  Int?
+  blindBeyond Boolean @default(false) // "blind beyond this radius"
+  tremorsense Int?
+  truesight   Int?
+
+  // Languages (free-text: "Common, Draconic", "understands Abyssal", "—") and
+  // condition immunities (free-text to match CharacterCondition.name).
+  languages           String?
+  conditionImmunities String[]
+
+  // Challenge. CR is exact for 1/8, 1/4, 1/2 and integers to 30; XP is stored
+  // as the block prints it. Proficiency bonus is derived from CR, not stored.
+  challengeRating  Decimal? @db.Decimal(5, 3)
+  experiencePoints Int?
+
+  // Legendary / lair
+  legendaryActionsPerRound Int? // usually 3
+  hasLair                  Boolean @default(false)
+
+  // Monster-only flavor (nullable)
+  environment String[] // habitats: "Forest", "Underdark"
+  source      String? // "Monster Manual", homebrew doc, ...
+
+  // NPC-only flavor (nullable)
+  occupation String? // "Blacksmith", "Guard Captain"
+  faction    String?
+  race       String?
+
+  // Relations
+  entries         StatBlockEntry[]
+  skills          CreatureSkill[]
+  damageModifiers CreatureDamageModifier[]
+  inventory       InventoryItem[]
+  placements      CreaturePlacement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind])
+  @@index([creatureType])
+}
+
+// A single stat-block section (trait / action / legendary action / ...).
+// One polymorphic table keyed by `category` instead of a table per section.
+model StatBlockEntry {
+  id         String   @id @default(uuid()) @db.Uuid
+  creatureId String   @db.Uuid
+  creature   Creature @relation(fields: [creatureId], references: [id], onDelete: Cascade)
+
+  category    StatBlockEntryCategory
+  name        String // "Multiattack", "Bite", "Legendary Resistance"
+  description String // free-text MM prose (to-hit, damage, effects)
+
+  sortOrder     Int  @default(0) // preserve MM ordering within a category
+  legendaryCost Int? // "Costs 2 Actions" for legendary actions
+
+  @@index([creatureId])
+}
+
+// A skill proficiency held by a creature. Mirrors CharacterSkill; the +N bonus
+// is derived (ability mod + prof, doubled for EXPERTISE).
+model CreatureSkill {
+  id         String   @id @default(uuid()) @db.Uuid
+  creatureId String   @db.Uuid
+  creature   Creature @relation(fields: [creatureId], references: [id], onDelete: Cascade)
+
+  skill       Skill
+  proficiency SkillProficiency @default(PROFICIENT)
+
+  @@unique([creatureId, skill])
+}
+
+// Damage vulnerability / resistance / immunity. `note` carries the qualifier
+// ("from nonmagical attacks not made with silvered weapons"); `damageType` may
+// be null for a purely descriptive line.
+model CreatureDamageModifier {
+  id         String   @id @default(uuid()) @db.Uuid
+  creatureId String   @db.Uuid
+  creature   Creature @relation(fields: [creatureId], references: [id], onDelete: Cascade)
+
+  kind       DamageModifierKind
+  damageType DamageType?
+  note       String?
+
+  @@index([creatureId])
+}
+
+// ---------------------------------------------------------------------------
+// Explicit join model for the Creature <-> Location many-to-many.
+// Unlike an implicit relation, it lets each assignment carry its own fields
 // (quantity, notes, spawn rate, etc.).
 // ---------------------------------------------------------------------------
-model NpcPlacement {
-  npcId      String @db.Uuid
+model CreaturePlacement {
+  creatureId String @db.Uuid
   locationId String @db.Uuid
 
-  npc      NPC      @relation(fields: [npcId], references: [id], onDelete: Cascade)
-  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-
-  notes String? // per-location detail, e.g. "runs the north-gate armory"
-
-  @@id([npcId, locationId])
-}
-
-model MonsterPlacement {
-  monsterId  String @db.Uuid
-  locationId String @db.Uuid
-
-  monster  Monster  @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  creature Creature @relation(fields: [creatureId], references: [id], onDelete: Cascade)
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   quantity Int     @default(1) // how many appear at this location
-  notes    String?
+  notes    String? // per-location detail, e.g. "runs the north-gate armory"
 
-  @@id([monsterId, locationId])
+  @@id([creatureId, locationId])
 }
 
 // ---------------------------------------------------------------------------
