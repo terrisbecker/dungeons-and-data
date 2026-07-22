@@ -415,27 +415,49 @@ model Item {
   // pricing, currency conversion. null = unpriced / priceless / quest item.
   baseValueCp Int?
 
-  // Weapon stats — populated when type = WEAPON, otherwise null.
-  weaponCategory   WeaponCategory?
-  damageDice       String? // "1d8" (free text keeps homebrew open)
-  damageType       DamageType?
-  versatileDamage  String? // two-handed damage for versatile weapons, e.g. "1d10"
-  weaponProperties WeaponProperty[]
-  rangeNormal      Int? // feet (thrown/ranged)
-  rangeLong        Int? // feet
-
-  // Armor stats — populated when type = ARMOR (includes shields), otherwise null.
-  armorCategory       ArmorCategory?
-  baseArmorClass      Int? // for a shield, store the bonus (e.g. 2); interpret by category in the service layer
-  addDexToArmorClass  Boolean? // light/medium armor add Dex mod
-  maxDexBonus         Int? // medium armor caps at +2; null = uncapped
-  strengthRequirement Int? // heavy armor STR minimum
-  stealthDisadvantage Boolean        @default(false)
+  // Type-specific stat blocks live in their own 1:1 satellite tables instead of
+  // as nullable columns here — a WEAPON has a WeaponStats row, ARMOR has an
+  // ArmorStats row, everything else has neither. This keeps the base row lean
+  // (no sea of nulls), lets each stat be NOT NULL where it belongs, and makes
+  // the "type ⟺ stat block" pairing the service layer's invariant to enforce
+  // (same discipline as ability-score ranges / the attunement cap). Add further
+  // satellites the same way (e.g. ContainerStats) rather than widening Item.
+  weapon WeaponStats?
+  armor  ArmorStats?
 
   inventory InventoryItem[]
 
   @@index([type])
   @@index([rarity])
+}
+
+// Weapon-only stats. Exactly one row per WEAPON-typed Item (1:1 on itemId).
+// Cascades with its parent Item so deleting the catalog entry drops the stats.
+model WeaponStats {
+  itemId String @id @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  weaponCategory   WeaponCategory
+  damageDice       String // "1d8" (free text keeps homebrew open)
+  damageType       DamageType
+  versatileDamage  String? // two-handed damage for versatile weapons, e.g. "1d10"
+  weaponProperties WeaponProperty[]
+  rangeNormal      Int? // feet (thrown/ranged)
+  rangeLong        Int? // feet
+}
+
+// Armor-only stats (includes shields via ArmorCategory.SHIELD). Exactly one row
+// per ARMOR-typed Item (1:1 on itemId). Cascades with its parent Item.
+model ArmorStats {
+  itemId String @id @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  armorCategory       ArmorCategory
+  baseArmorClass      Int // for a shield, store the bonus (e.g. 2); interpret by category in the service layer
+  addDexToArmorClass  Boolean @default(false) // light/medium armor add Dex mod
+  maxDexBonus         Int? // medium armor caps at +2; null = uncapped
+  strengthRequirement Int? // heavy armor STR minimum
+  stealthDisadvantage Boolean @default(false)
 }
 
 // One catalog Item assigned to one owner, with per-instance inventory state.

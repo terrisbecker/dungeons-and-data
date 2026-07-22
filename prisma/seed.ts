@@ -212,75 +212,104 @@ async function seedCatalog() {
   }
 
   // Items have no unique constraint, so clear our named set before recreating.
-  const itemDefs = [
+  // Weapon/armor stats live in 1:1 satellites, written via nested `create`.
+  const itemDefs: Prisma.ItemCreateInput[] = [
     {
       name: "Dagger",
       type: ItemType.WEAPON,
-      weaponCategory: WeaponCategory.SIMPLE,
-      damageDice: "1d4",
-      damageType: DamageType.PIERCING,
-      weaponProperties: [
-        WeaponProperty.FINESSE,
-        WeaponProperty.LIGHT,
-        WeaponProperty.THROWN,
-      ],
       baseValueCp: 200,
+      weapon: {
+        create: {
+          weaponCategory: WeaponCategory.SIMPLE,
+          damageDice: "1d4",
+          damageType: DamageType.PIERCING,
+          weaponProperties: [
+            WeaponProperty.FINESSE,
+            WeaponProperty.LIGHT,
+            WeaponProperty.THROWN,
+          ],
+        },
+      },
     },
     {
       name: "Greataxe",
       type: ItemType.WEAPON,
-      weaponCategory: WeaponCategory.MARTIAL,
-      damageDice: "1d12",
-      damageType: DamageType.SLASHING,
-      weaponProperties: [WeaponProperty.HEAVY, WeaponProperty.TWO_HANDED],
       baseValueCp: 3000,
+      weapon: {
+        create: {
+          weaponCategory: WeaponCategory.MARTIAL,
+          damageDice: "1d12",
+          damageType: DamageType.SLASHING,
+          weaponProperties: [WeaponProperty.HEAVY, WeaponProperty.TWO_HANDED],
+        },
+      },
     },
     {
       name: "Mace",
       type: ItemType.WEAPON,
-      weaponCategory: WeaponCategory.SIMPLE,
-      damageDice: "1d6",
-      damageType: DamageType.BLUDGEONING,
       baseValueCp: 500,
+      weapon: {
+        create: {
+          weaponCategory: WeaponCategory.SIMPLE,
+          damageDice: "1d6",
+          damageType: DamageType.BLUDGEONING,
+        },
+      },
     },
     {
       name: "Shortbow",
       type: ItemType.WEAPON,
-      weaponCategory: WeaponCategory.SIMPLE,
-      damageDice: "1d6",
-      damageType: DamageType.PIERCING,
-      weaponProperties: [
-        WeaponProperty.AMMUNITION,
-        WeaponProperty.TWO_HANDED,
-        WeaponProperty.RANGE,
-      ],
-      rangeNormal: 80,
-      rangeLong: 320,
       baseValueCp: 2500,
+      weapon: {
+        create: {
+          weaponCategory: WeaponCategory.SIMPLE,
+          damageDice: "1d6",
+          damageType: DamageType.PIERCING,
+          weaponProperties: [
+            WeaponProperty.AMMUNITION,
+            WeaponProperty.TWO_HANDED,
+            WeaponProperty.RANGE,
+          ],
+          rangeNormal: 80,
+          rangeLong: 320,
+        },
+      },
     },
     {
       name: "Leather Armor",
       type: ItemType.ARMOR,
-      armorCategory: ArmorCategory.LIGHT,
-      baseArmorClass: 11,
-      addDexToArmorClass: true,
       baseValueCp: 1000,
+      armor: {
+        create: {
+          armorCategory: ArmorCategory.LIGHT,
+          baseArmorClass: 11,
+          addDexToArmorClass: true,
+        },
+      },
     },
     {
       name: "Chain Mail",
       type: ItemType.ARMOR,
-      armorCategory: ArmorCategory.HEAVY,
-      baseArmorClass: 16,
-      strengthRequirement: 13,
-      stealthDisadvantage: true,
       baseValueCp: 7500,
+      armor: {
+        create: {
+          armorCategory: ArmorCategory.HEAVY,
+          baseArmorClass: 16,
+          strengthRequirement: 13,
+          stealthDisadvantage: true,
+        },
+      },
     },
     {
       name: "Shield",
       type: ItemType.ARMOR,
-      armorCategory: ArmorCategory.SHIELD,
-      baseArmorClass: 2,
       baseValueCp: 1000,
+      armor: {
+        create: {
+          armorCategory: ArmorCategory.SHIELD,
+          baseArmorClass: 2,
+        },
+      },
     },
     {
       name: "Potion of Healing",

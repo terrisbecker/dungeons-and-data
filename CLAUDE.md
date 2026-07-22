@@ -40,7 +40,7 @@ There is no test setup yet. Copy `.env.example` to `.env`, then
 `@check`): `npx prisma migrate dev --name <name> --create-only`, hand-edit the
 generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
-## Current state (as of 2026-07-21)
+## Current state (as of 2026-07-22)
 
 Data model complete; the full layered stack for **all PlayerCharacter-related
 data** is now implemented. Working on branch `api/create-player-crud-and-routes`.
@@ -54,7 +54,10 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
 - `prisma/schema.prisma` — full initial data model (see below).
 - `prisma/migrations/…_init` — **first migration, applied.** Creates all 21
   tables/enums plus two hand-added CHECK constraints: ability scores 1–30
-  (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`).
+  (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`). Two later
+  migrations applied: `…_flesh_out_pc_catalogs`, then
+  `…_break_out_item_stats` (hand-authored raw SQL — extracts `WeaponStats`/
+  `ArmorStats` satellites from `Item` and backfills them; 23 tables total).
 - **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
   `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
   `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
@@ -148,18 +151,28 @@ Models currently defined:
 - **Proficiency** — weapon/armor/tool/language/save proficiencies.
 - **Item** — shared **catalog** definition, created once and reusable across
   owners: classification (`type`/`rarity`/`isMagic`/`tags`), physical
-  (`weight`/`stackable`/`consumable`/`requiresAttunement`), economy
-  (`baseValueCp`), and nullable weapon/armor stat blocks. Item enums:
-  `ItemType`, `ItemRarity`, `WeaponCategory`, `WeaponProperty`, `ArmorCategory`,
-  `DamageType`.
+  (`weight`/`stackable`/`consumable`/`requiresAttunement`), and economy
+  (`baseValueCp`). Type-specific stats live in 1:1 **satellite** tables, not on
+  `Item` (see below). Item enums: `ItemType`, `ItemRarity`, `WeaponCategory`,
+  `WeaponProperty`, `ArmorCategory`, `DamageType`.
   - **Cost is deliberately flexible**: `baseValueCp` is a single reference value
     in **copper** (atomic 5e unit, integer — no float drift; 1 gp = 100 cp;
     null = priceless). The future economy layer sits on top for shop/region
     pricing, buy/sell modifiers, and currency conversion — don't bake pricing
     logic into the catalog.
-  - Weapon stats (`weaponCategory`, `damageDice`, `damageType`, …) and armor
-    stats (`armorCategory`, `baseArmorClass`, `maxDexBonus`, …) are nullable
-    columns on `Item`, populated only for the matching `type`.
+- **WeaponStats** / **ArmorStats** — 1:1 satellites of `Item` keyed by `itemId`
+  (PK = FK, `onDelete: Cascade`), holding the stat blocks that used to be
+  nullable columns on `Item`. A `WEAPON` has exactly one `WeaponStats` row
+  (`weaponCategory`/`damageDice`/`damageType` are NOT NULL; `versatileDamage`/
+  `weaponProperties`/`rangeNormal`/`rangeLong` optional); `ARMOR` (incl. shields)
+  has one `ArmorStats` row (`armorCategory`/`baseArmorClass` NOT NULL; dex/STR/
+  stealth fields optional); every other type has neither. This keeps the base
+  row lean (no sea of nulls). The **type ⟺ stat block** pairing is a service-
+  layer invariant (`items.service.ts` — same discipline as ability-score
+  ranges / attunement cap); Prisma can't express it. Reads join the satellites
+  and the service **flattens** them back into the flat `Item` response shape.
+  Add further per-type stats the same way (e.g. `ContainerStats`) rather than
+  widening `Item`.
 - **InventoryItem** — one `Item` **assigned** to one owner with per-instance
   state (`quantity`/`equipped`/`attuned`). Owner is polymorphic via nullable FKs
   (`characterId`/`npcId`, extend with shop/chest later); **exactly one must be

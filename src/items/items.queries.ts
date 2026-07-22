@@ -14,22 +14,32 @@ const select = {
   stackable: true,
   consumable: true,
   baseValueCp: true,
-  weaponCategory: true,
-  damageDice: true,
-  damageType: true,
-  versatileDamage: true,
-  weaponProperties: true,
-  rangeNormal: true,
-  rangeLong: true,
-  armorCategory: true,
-  baseArmorClass: true,
-  addDexToArmorClass: true,
-  maxDexBonus: true,
-  strengthRequirement: true,
-  stealthDisadvantage: true,
+  // Type-specific stats now live in 1:1 satellites; pull them in so the service
+  // layer can flatten them back into the response shape.
+  weapon: {
+    select: {
+      weaponCategory: true,
+      damageDice: true,
+      damageType: true,
+      versatileDamage: true,
+      weaponProperties: true,
+      rangeNormal: true,
+      rangeLong: true,
+    },
+  },
+  armor: {
+    select: {
+      armorCategory: true,
+      baseArmorClass: true,
+      addDexToArmorClass: true,
+      maxDexBonus: true,
+      strengthRequirement: true,
+      stealthDisadvantage: true,
+    },
+  },
 } satisfies Prisma.ItemSelect;
 
-export function createItem(data: Prisma.ItemUncheckedCreateInput) {
+export function createItem(data: Prisma.ItemCreateInput) {
   return prisma.item.create({ data, select });
 }
 
@@ -41,7 +51,7 @@ export function findItemById(id: string) {
   return prisma.item.findUnique({ where: { id }, select });
 }
 
-export function updateItem(id: string, data: Prisma.ItemUncheckedUpdateInput) {
+export function updateItem(id: string, data: Prisma.ItemUpdateInput) {
   return prisma.item.update({ where: { id }, data, select });
 }
 
