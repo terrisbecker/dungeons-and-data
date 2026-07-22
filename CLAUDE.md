@@ -27,6 +27,8 @@ npm run format           # prettier --write .
 npm run prisma:generate  # regenerate Prisma Client after schema edits
 npm run prisma:migrate   # prisma migrate dev — create/apply a dev migration
 
+npx tsx prisma/seed.ts   # seed 5 fully-populated test characters (re-runnable)
+
 docker compose up -d db  # start local Postgres (healthchecked, named volume)
 docker compose down      # stop it (add -v to also drop the data volume)
 ```
@@ -38,27 +40,62 @@ There is no test setup yet. Copy `.env.example` to `.env`, then
 `@check`): `npx prisma migrate dev --name <name> --create-only`, hand-edit the
 generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
-## Current state (as of 2026-07-21)
+## Current state (as of 2026-07-22)
 
-Early scaffolding. Working on branch `database/prisma-setup-tables`.
+Data model complete; the full layered stack for **all PlayerCharacter-related
+data** is now implemented. Working on branch `api/create-player-crud-and-routes`.
 
 **Implemented:**
 
 - `src/index.ts` — loads env, starts the HTTP server (`PORT`, default 3000).
-- `src/app.ts` — `createApp()` builds the Express app; only a `GET /health` route so far.
+- `src/app.ts` — `createApp()` mounts `express.json()`, `GET /health`, every
+  topic router, then the central error middleware (registered last).
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
 - `prisma/migrations/…_init` — **first migration, applied.** Creates all 21
   tables/enums plus two hand-added CHECK constraints: ability scores 1–30
-  (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`).
+  (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`). Two later
+  migrations applied: `…_flesh_out_pc_catalogs`, then
+  `…_break_out_item_stats` (hand-authored raw SQL — extracts `WeaponStats`/
+  `ArmorStats` satellites from `Item` and backfills them; 23 tables total).
+- **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
+  `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
+  `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
+  responses), and `validate.ts` (hand-rolled primitive field parsers — no
+  validation library, matching the "generic errors for now" stance).
+- **PlayerCharacter CRUD across 15 topic folders**, each with the four
+  `[topic].[layer].ts` files (flat, per the `monsters/` convention; top-level
+  URLs with `characterId` in the body/query):
+  - Hub: `characters/` (+ `characters.derived.ts`, pure derived-stats functions).
+    Soft delete via `deletedAt`; reads filter `deletedAt: null`. Two reads:
+    `GET /characters/:id` returns the lean **core** (scalars + classes + skills +
+    a computed `derived` block, what `PATCH` also returns), and
+    `GET /characters/:id/sheet` is the full **virtual character sheet** that
+    additionally joins spell slots, resources, proficiencies, conditions, spells,
+    feats, features, and inventory. See `docs/character-sheet.md`.
+  - Owned children (single `id` PK, `/topic/:id`): `character-classes/`,
+    `spell-slots/`, `character-resources/`, `character-skills/`,
+    `proficiencies/`, `character-conditions/`, `inventory-items/`.
+  - Composite-key joins (`/topic/:characterId/:otherId`): `character-spells/`,
+    `character-feats/` (pure join — no PATCH), `character-features/`.
+  - Catalogs (referenced by the joins): `items/`, `spells/`, `feats/`,
+    `features/`. `spells/`, `feats/`, and `features/` were fleshed out from
+    stubs into full 5e shapes (see the Data model section for their columns).
+  - Service-layer invariants: ability scores 1–30, `inventory-items` forces the
+    character owner (npcId null) and enforces the ≤3 attunement cap.
+- **Seed + docs:** `prisma/seed.ts` creates 5 fully-populated test characters
+  (re-runnable); `docs/character-sheet.md` documents the character-sheet curl.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
-- Config: `tsconfig.json`, `eslint.config.mjs`, `.prettierrc.json`, `prisma.config.ts`, `.env.example`.
+- Config: `tsconfig.json`, `eslint.config.mjs` (adds
+  `no-unused-vars` `argsIgnorePattern: "^_"`), `.prettierrc.json`,
+  `prisma.config.ts`, `.env.example`.
 
 **Not yet done:**
 
-- None of the query / service / controller / route layers exist yet — only the
-  `/health` route.
+- No layers yet for NPC / Monster / Location (and their placements) or the
+  economy/pricing layer.
+- No auth, no pagination.
 - No tests, no CI.
 
 ## Architecture — layered backend
@@ -99,9 +136,10 @@ Models currently defined:
   (stored as **final** values, post-racial/ASI); per-save proficiency booleans;
   combat (HP, `hitPointMaxModifier`, AC, death saves); movement
   (`speed`/`flySpeed`/`swimSpeed`/`climbSpeed`) and `darkvision`; concentration
-  pointer; currency (5e coin types); `deletedAt` soft delete. Related to skills,
-  items, classes, proficiencies, spells, feats, features, conditions, resources,
-  and spell slots.
+  pointer; currency (5e coin types); the four roleplay boxes
+  (`traits`/`ideals`/`bonds`/`flaws`); `deletedAt` soft delete. Related to
+  skills, items, classes, proficiencies, spells, feats, features, conditions,
+  resources, and spell slots.
 - **CharacterClass** — one row per class a character has levels in (supports
   **multiclassing**); carries `hitDieSize`/`hitDiceUsed` (hit dice are
   per-class) and `spellcastingAbility`; unique on `(characterId, className)`.
@@ -113,18 +151,28 @@ Models currently defined:
 - **Proficiency** — weapon/armor/tool/language/save proficiencies.
 - **Item** — shared **catalog** definition, created once and reusable across
   owners: classification (`type`/`rarity`/`isMagic`/`tags`), physical
-  (`weight`/`stackable`/`consumable`/`requiresAttunement`), economy
-  (`baseValueCp`), and nullable weapon/armor stat blocks. Item enums:
-  `ItemType`, `ItemRarity`, `WeaponCategory`, `WeaponProperty`, `ArmorCategory`,
-  `DamageType`.
+  (`weight`/`stackable`/`consumable`/`requiresAttunement`), and economy
+  (`baseValueCp`). Type-specific stats live in 1:1 **satellite** tables, not on
+  `Item` (see below). Item enums: `ItemType`, `ItemRarity`, `WeaponCategory`,
+  `WeaponProperty`, `ArmorCategory`, `DamageType`.
   - **Cost is deliberately flexible**: `baseValueCp` is a single reference value
     in **copper** (atomic 5e unit, integer — no float drift; 1 gp = 100 cp;
     null = priceless). The future economy layer sits on top for shop/region
     pricing, buy/sell modifiers, and currency conversion — don't bake pricing
     logic into the catalog.
-  - Weapon stats (`weaponCategory`, `damageDice`, `damageType`, …) and armor
-    stats (`armorCategory`, `baseArmorClass`, `maxDexBonus`, …) are nullable
-    columns on `Item`, populated only for the matching `type`.
+- **WeaponStats** / **ArmorStats** — 1:1 satellites of `Item` keyed by `itemId`
+  (PK = FK, `onDelete: Cascade`), holding the stat blocks that used to be
+  nullable columns on `Item`. A `WEAPON` has exactly one `WeaponStats` row
+  (`weaponCategory`/`damageDice`/`damageType` are NOT NULL; `versatileDamage`/
+  `weaponProperties`/`rangeNormal`/`rangeLong` optional); `ARMOR` (incl. shields)
+  has one `ArmorStats` row (`armorCategory`/`baseArmorClass` NOT NULL; dex/STR/
+  stealth fields optional); every other type has neither. This keeps the base
+  row lean (no sea of nulls). The **type ⟺ stat block** pairing is a service-
+  layer invariant (`items.service.ts` — same discipline as ability-score
+  ranges / attunement cap); Prisma can't express it. Reads join the satellites
+  and the service **flattens** them back into the flat `Item` response shape.
+  Add further per-type stats the same way (e.g. `ContainerStats`) rather than
+  widening `Item`.
 - **InventoryItem** — one `Item` **assigned** to one owner with per-instance
   state (`quantity`/`equipped`/`attuned`). Owner is polymorphic via nullable FKs
   (`characterId`/`npcId`, extend with shop/chest later); **exactly one must be
@@ -134,10 +182,20 @@ Models currently defined:
 - **NPC**, **Monster** — reusable profiles placed into locations.
 - **NpcPlacement**, **MonsterPlacement** — explicit M2M join models between
   NPC/Monster and Location, carrying per-placement data (notes, quantity).
-- **Spell** / **CharacterSpell**, **Feat** / **CharacterFeat** — shared catalog
-  rows joined to characters with per-character state (known/prepared, source class).
+- **Spell** / **CharacterSpell** — the `Spell` catalog carries full 5e spell
+  data: `level`/`school`, casting details (`castingTime`/`range`/`duration`/
+  `higherLevel`), V/S/M components (`verbal`/`somatic`/`material`/
+  `materialComponent`), `concentration`/`ritual` flags, and structured combat
+  hooks for the future combat layer (`savingThrow` `Ability?`, `damageType`
+  `DamageType?`, `isAttack`). `CharacterSpell` holds per-character state
+  (`known`/`prepared`/`alwaysPrepared` for domain/oath spells/`sourceClass`).
+- **Feat** / **CharacterFeat** — the `Feat` catalog carries `prerequisite`,
+  `repeatable`, and `grantsAbilityScoreIncrease` (half-feat marker);
+  `CharacterFeat` is a pure join.
 - **Feature** / **CharacterFeature** — generalized class/subclass/racial/
-  background features tagged by `FeatureSource`; unique on `(name, source)`.
+  background features tagged by `FeatureSource`, with `level` (gained-at level;
+  null for racial/background) and free-text `subtype` (e.g. "Wizard", "School of
+  Evocation"); unique on `(name, source)`.
 - **CharacterCondition** — active status effects (poisoned, prone, exhaustion),
   with optional `level` for stacking.
 

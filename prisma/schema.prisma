@@ -272,7 +272,13 @@ model PlayerCharacter {
 
   description String?
   background  String? // free text; grants proficiencies/features via Feature rows
-  traits      String?
+
+  // The four 5e roleplay boxes. `traits` holds personality traits; ideals,
+  // bonds, and flaws are their own free-text fields on the character sheet.
+  traits String?
+  ideals String?
+  bonds  String?
+  flaws  String?
 
   // Ownership / campaign context (stub FKs — target tables to be defined)
   playerId   String? @db.Uuid
@@ -409,27 +415,49 @@ model Item {
   // pricing, currency conversion. null = unpriced / priceless / quest item.
   baseValueCp Int?
 
-  // Weapon stats — populated when type = WEAPON, otherwise null.
-  weaponCategory   WeaponCategory?
-  damageDice       String? // "1d8" (free text keeps homebrew open)
-  damageType       DamageType?
-  versatileDamage  String? // two-handed damage for versatile weapons, e.g. "1d10"
-  weaponProperties WeaponProperty[]
-  rangeNormal      Int? // feet (thrown/ranged)
-  rangeLong        Int? // feet
-
-  // Armor stats — populated when type = ARMOR (includes shields), otherwise null.
-  armorCategory       ArmorCategory?
-  baseArmorClass      Int? // for a shield, store the bonus (e.g. 2); interpret by category in the service layer
-  addDexToArmorClass  Boolean? // light/medium armor add Dex mod
-  maxDexBonus         Int? // medium armor caps at +2; null = uncapped
-  strengthRequirement Int? // heavy armor STR minimum
-  stealthDisadvantage Boolean        @default(false)
+  // Type-specific stat blocks live in their own 1:1 satellite tables instead of
+  // as nullable columns here — a WEAPON has a WeaponStats row, ARMOR has an
+  // ArmorStats row, everything else has neither. This keeps the base row lean
+  // (no sea of nulls), lets each stat be NOT NULL where it belongs, and makes
+  // the "type ⟺ stat block" pairing the service layer's invariant to enforce
+  // (same discipline as ability-score ranges / the attunement cap). Add further
+  // satellites the same way (e.g. ContainerStats) rather than widening Item.
+  weapon WeaponStats?
+  armor  ArmorStats?
 
   inventory InventoryItem[]
 
   @@index([type])
   @@index([rarity])
+}
+
+// Weapon-only stats. Exactly one row per WEAPON-typed Item (1:1 on itemId).
+// Cascades with its parent Item so deleting the catalog entry drops the stats.
+model WeaponStats {
+  itemId String @id @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  weaponCategory   WeaponCategory
+  damageDice       String // "1d8" (free text keeps homebrew open)
+  damageType       DamageType
+  versatileDamage  String? // two-handed damage for versatile weapons, e.g. "1d10"
+  weaponProperties WeaponProperty[]
+  rangeNormal      Int? // feet (thrown/ranged)
+  rangeLong        Int? // feet
+}
+
+// Armor-only stats (includes shields via ArmorCategory.SHIELD). Exactly one row
+// per ARMOR-typed Item (1:1 on itemId). Cascades with its parent Item.
+model ArmorStats {
+  itemId String @id @db.Uuid
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  armorCategory       ArmorCategory
+  baseArmorClass      Int // for a shield, store the bonus (e.g. 2); interpret by category in the service layer
+  addDexToArmorClass  Boolean @default(false) // light/medium armor add Dex mod
+  maxDexBonus         Int? // medium armor caps at +2; null = uncapped
+  strengthRequirement Int? // heavy armor STR minimum
+  stealthDisadvantage Boolean @default(false)
 }
 
 // One catalog Item assigned to one owner, with per-instance inventory state.
@@ -518,6 +546,27 @@ model Spell {
   school      SpellSchool?
   description String?
 
+  // Casting details — free text keeps homebrew open.
+  castingTime String? // "1 action", "1 bonus action", "1 minute"
+  range       String? // "60 feet", "Self", "Touch"
+  duration    String? // "Instantaneous", "Concentration, up to 1 minute"
+  higherLevel String? // "At Higher Levels" scaling text
+
+  // Components (V/S/M). `materialComponent` holds the material text when material.
+  verbal            Boolean @default(false)
+  somatic           Boolean @default(false)
+  material          Boolean @default(false)
+  materialComponent String? // "a tiny ball of bat guano and sulfur"
+
+  concentration Boolean @default(false)
+  ritual        Boolean @default(false)
+
+  // Structured combat hooks for the future derived/combat layer. Null when the
+  // spell forces no save / deals no typed damage; `isAttack` flags spell attacks.
+  savingThrow Ability?
+  damageType  DamageType?
+  isAttack    Boolean     @default(false)
+
   characters CharacterSpell[]
 }
 
@@ -527,9 +576,12 @@ model CharacterSpell {
   character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
   spell       Spell           @relation(fields: [spellId], references: [id], onDelete: Cascade)
 
-  known       Boolean @default(true)
-  prepared    Boolean @default(false)
-  sourceClass String? // which class granted it (multiclass casters)
+  known          Boolean @default(true)
+  prepared       Boolean @default(false)
+  // Domain/oath/subclass spells that are always prepared and do not count
+  // against the caster's prepared-spell limit.
+  alwaysPrepared Boolean @default(false)
+  sourceClass    String? // which class granted it (multiclass casters)
 
   @@id([characterId, spellId])
 }
@@ -538,6 +590,12 @@ model Feat {
   id          String  @id @default(uuid()) @db.Uuid
   name        String  @unique
   description String?
+
+  prerequisite String? // "Strength 13 or higher", "Ability to cast a spell"
+  repeatable   Boolean @default(false) // can be taken more than once
+
+  // Half-feats grant a +1 ability score increase alongside their benefit.
+  grantsAbilityScoreIncrease Boolean @default(false)
 
   characters CharacterFeat[]
 }
@@ -559,6 +617,9 @@ model Feature {
   name        String
   description String?
   source      FeatureSource
+
+  level   Int? // class level the feature is gained at; null for racial/background
+  subtype String? // free-text origin detail: "Wizard", "School of Evocation", "Elf"
 
   characters CharacterFeature[]
 

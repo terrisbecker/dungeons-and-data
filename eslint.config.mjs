@@ -8,5 +8,15 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      // Allow intentionally-unused identifiers when prefixed with `_`
+      // (e.g. Express's required 4th error-middleware arg).
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
   prettier,
 );
