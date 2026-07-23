@@ -93,6 +93,23 @@ enum CreatureSize {
   GARGANTUAN
 }
 
+// --- Campaign / organization enums ---------------------------------------
+// A Player's role WITHIN a given campaign — the same person can DM one game and
+// play in another, so the role lives on the membership join, not on Player.
+enum CampaignRole {
+  DUNGEON_MASTER
+  PLAYER
+}
+
+// Lifecycle of a campaign, for filtering the DM's dashboard.
+enum CampaignStatus {
+  PLANNING
+  ACTIVE
+  ON_HIATUS
+  COMPLETED
+  ARCHIVED
+}
+
 // --- Item catalog enums --------------------------------------------------
 // Broad bucket for a catalog item. Weapon/armor sub-details live in the
 // *Category fields below. Kept as a closed set; use OTHER + tags for oddities.
@@ -216,6 +233,71 @@ enum DamageModifierKind {
 }
 
 // ---------------------------------------------------------------------------
+// Player — a real person / user account (distinct from PlayerCharacter, the
+// in-world hero they control). One Player can join many campaigns and own many
+// characters. Identity is kept minimal until an auth layer lands; `username` is
+// the unique handle accounts are identified by pre-auth.
+// ---------------------------------------------------------------------------
+model Player {
+  id          String  @id @default(uuid()) @db.Uuid
+  username    String  @unique
+  displayName String?
+
+  // A Player's role is per-campaign (DM here, player there), so it lives on the
+  // membership join rather than on the Player.
+  memberships CampaignMembership[]
+  characters  PlayerCharacter[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Campaign — one running game. It is the scope for everything that varies from
+// game to game: which players are at the table, the world's locations, the
+// characters, and campaign-specific creatures. Shared reference catalogs
+// (Item, Spell, Feat, Feature) are intentionally NOT scoped here — they are
+// global definitions reused across every campaign.
+//
+// The DM is not a dedicated column; it is the membership whose role is
+// DUNGEON_MASTER (supports co-DMs and avoids a denormalized pointer that could
+// drift). "Exactly one DM per campaign" is a service-layer invariant, same
+// discipline as the ability-score ranges and attunement cap.
+// ---------------------------------------------------------------------------
+model Campaign {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  status      CampaignStatus @default(PLANNING)
+
+  // Everything that belongs to this campaign.
+  memberships CampaignMembership[]
+  characters  PlayerCharacter[]
+  locations   Location[]
+  creatures   Creature[] // campaign-specific creatures; shared ones have null campaignId
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A Player's seat at a Campaign's table, carrying their role in that game.
+// One row per (campaign, player); the join owns data an implicit M2M could not.
+model CampaignMembership {
+  id         String   @id @default(uuid()) @db.Uuid
+  campaignId String   @db.Uuid
+  playerId   String   @db.Uuid
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  role CampaignRole @default(PLAYER)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([campaignId, playerId])
+  @@index([playerId])
+}
+
+// ---------------------------------------------------------------------------
 // Location
 // Locations nest via a
 // self-referencing parent/children relation (a region contains hamlets, a
@@ -226,6 +308,11 @@ model Location {
   locationName String
   description  String?
   type         String // free text: region, country, city, town, cottage, ...
+
+  // Owning campaign. Nullable so a shared/template world can exist unscoped;
+  // campaign-owned locations cascade-delete with the campaign.
+  campaignId String?   @db.Uuid
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   // Nested-location hierarchy (self relation)
   parentId String?    @db.Uuid
@@ -239,6 +326,7 @@ model Location {
   updatedAt DateTime @updatedAt
 
   @@index([parentId])
+  @@index([campaignId])
 }
 
 // ---------------------------------------------------------------------------
@@ -325,9 +413,14 @@ model PlayerCharacter {
   bonds  String?
   flaws  String?
 
-  // Ownership / campaign context (stub FKs — target tables to be defined)
-  playerId   String? @db.Uuid
-  campaignId String? @db.Uuid
+  // Ownership / campaign context. Both nullable: a character can be drafted
+  // before being assigned to a player or slotted into a campaign. SetNull on
+  // delete detaches the character (a meaningful, soft-deletable record) rather
+  // than destroying it when a player or campaign is removed.
+  playerId   String?   @db.Uuid
+  player     Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  campaignId String?   @db.Uuid
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   // Relations
   skills        CharacterSkill[]
@@ -615,6 +708,12 @@ model Creature {
   faction    String?
   race       String?
 
+  // Owning campaign. Null = a shared catalog creature (e.g. a Monster Manual
+  // goblin) reusable across every game; non-null = a campaign-specific creature
+  // (a named homebrew NPC) that cascade-deletes with its campaign.
+  campaignId String?   @db.Uuid
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
   // Relations
   entries         StatBlockEntry[]
   skills          CreatureSkill[]
@@ -627,6 +726,7 @@ model Creature {
 
   @@index([kind])
   @@index([creatureType])
+  @@index([campaignId])
 }
 
 // A single stat-block section (trait / action / legendary action / ...).

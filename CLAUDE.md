@@ -53,16 +53,21 @@ Working on branch `database/mosters-and-npc`.
   topic router, then the central error middleware (registered last).
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
-- `prisma/migrations/…_init` — **single squashed baseline migration, applied.**
-  The earlier incremental migrations (`…_init`, `…_flesh_out_pc_catalogs`,
+- `prisma/migrations/…_init` — squashed baseline migration, applied. The earlier
+  incremental migrations (`…_init`, `…_flesh_out_pc_catalogs`,
   `…_break_out_item_stats`, `…_flesh_out_creatures`) were collapsed into one
-  fresh `…_init` reflecting the current schema (23 tables). It carries three
-  hand-added CHECK constraints (Prisma has no `@check`): ability scores 1–30 on
-  both `PlayerCharacter` and `Creature`, and the exactly-one-owner rule on
-  `InventoryItem` (`characterId` XOR `creatureId`). Regenerate the baseline the
-  same way if the schema churns again pre-release: delete the migration folder,
-  drop/recreate the `public` schema, `prisma migrate dev --name init
---create-only`, re-append the three CHECK blocks, then `prisma migrate dev`.
+  fresh `…_init` reflecting the schema (23 tables). The baseline still *creates*
+  three hand-added CHECK constraints (Prisma has no `@check`), but a follow-up
+  migration (`…_drop_ability_score_checks`) drops two of them, so only **one**
+  CHECK is live: the exactly-one-owner rule on `InventoryItem` (`characterId`
+  XOR `creatureId`) — a relational invariant worth guarding in the DB. The
+  ability-score 1–30 bounds on `PlayerCharacter`/`Creature` are now owned solely
+  by the service layer (a 5e *rules* limit, kept relaxable for homebrew).
+  **Prefer plain additive `prisma migrate dev` going forward — do NOT rebaseline
+  the history** (the old squash-and-re-append-CHECKs dance is what forced
+  hand-written SQL each time; additive migrations leave the existing constraint
+  untouched and stay fully Prisma-generated). The only remaining hand-SQL case
+  is adding/removing a CHECK, since Prisma can't diff them.
 - **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
   `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
   `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
@@ -215,8 +220,9 @@ Models currently defined:
   (`CreatureKind` NPC | MONSTER); NPC-only (`occupation`/`faction`/`race`) and
   Monster-only (`challengeRating`/`experiencePoints`/`environment`/`source`/
   legendary+lair) fields sit alongside as nullable columns. Mirrors
-  `PlayerCharacter` conventions: `@db.SmallInt` ability scores (1–30 CHECK),
-  six save-proficiency booleans; plus header (`size`/`creatureType` enum +
+  `PlayerCharacter` conventions: `@db.SmallInt` ability scores (1–30 enforced in
+  the service layer), six save-proficiency booleans; plus header
+  (`size`/`creatureType` enum +
   free-text `typeTags`/`alignmentNote`), defense (`armorClass`/`hitPoints`/
   `hitDice`), all movement modes + `hover`, senses (darkvision/blindsight/
   tremorsense/truesight + `blindBeyond`), free-text `languages`/
