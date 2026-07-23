@@ -1,7 +1,11 @@
 import { unauthorized } from "../http/http-error.js";
 import { mapPrismaError } from "../http/prisma-errors.js";
 import { asRecord, optionalString, requireString } from "../http/validate.js";
-import { createPlayerAccount, findPlayerForLogin } from "./auth.queries.js";
+import {
+  createPlayerAccount,
+  findPlayerForLogin,
+  findPlayerWithMemberships,
+} from "./auth.queries.js";
 import { signToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
@@ -56,4 +60,12 @@ export async function loginService(rawBody: unknown) {
       systemRole: player.systemRole,
     },
   };
+}
+
+// "Who am I" — the current player (public fields) plus their memberships. A
+// valid token for a since-deleted account yields 401.
+export async function meService(playerId: string) {
+  const player = await findPlayerWithMemberships(playerId);
+  if (!player) throw unauthorized();
+  return player;
 }

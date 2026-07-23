@@ -29,3 +29,24 @@ export function findPlayerForLogin(username: string) {
 export function createPlayerAccount(data: Prisma.PlayerUncheckedCreateInput) {
   return prisma.player.create({ data, select: playerPublicSelect });
 }
+
+// The current player plus their campaign memberships — the "who am I" read.
+// Memberships tell the frontend which campaigns the caller DMs (and thus what
+// it may edit) without decoding the token or a second request.
+export function findPlayerWithMemberships(id: string) {
+  return prisma.player.findUnique({
+    where: { id },
+    select: {
+      ...playerPublicSelect,
+      memberships: {
+        orderBy: { joinedAt: "asc" },
+        select: {
+          id: true,
+          role: true,
+          joinedAt: true,
+          campaign: { select: { id: true, name: true, status: true } },
+        },
+      },
+    },
+  });
+}

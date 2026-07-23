@@ -50,11 +50,12 @@ data** and **all Creature (NPC/Monster) + Location data** is implemented, plus a
 **Implemented:**
 
 - `src/index.ts` — loads env, starts the HTTP server (`PORT`, default 3000).
-- `src/app.ts` — `createApp()` mounts `express.json()`, the public `GET /health`
-  and `/auth` routes, then the global `requireAuth` gate, then every topic
-  router, then the central error middleware (registered last). Order matters:
-  register/login and health stay above `requireAuth`; everything below needs a
-  valid JWT.
+- `src/app.ts` — `createApp()` mounts `cors()` (allows any origin by default;
+  `CORS_ORIGIN` restricts to a comma-separated allowlist — Bearer-token auth
+  needs no cookies), then `express.json()`, the public `GET /health` and `/auth`
+  routes, then the global `requireAuth` gate, then every topic router, then the
+  central error middleware (registered last). Order matters: register/login and
+  health stay above `requireAuth`; everything below needs a valid JWT.
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
 - `prisma/migrations/…_init` — squashed baseline migration, applied. The earlier
@@ -94,8 +95,10 @@ data** and **all Creature (NPC/Monster) + Location data** is implemented, plus a
   Passwords are hashed with the built-in `crypto.scrypt` (`password.ts`, stored
   `salt:hash`, no dependency); JWTs use `jsonwebtoken` (`jwt.ts`, fail-fast on
   `JWT_SECRET` like `db.ts`, `JWT_EXPIRES_IN` default `7d`). `auth.middleware.ts`
-  exposes `requireAuth` (Bearer → `req.auth`); public `authRouter` serves
-  `POST /auth/register` (always a plain `USER`) and `/login`. **Authorization is
+  exposes `requireAuth` (Bearer → `req.auth`); `authRouter` serves the public
+  `POST /auth/register` (always a plain `USER`) and `/login`, plus
+  `GET /auth/me` (route-level `requireAuth`) returning the current player + their
+  campaign memberships — the frontend's "who am I". **Authorization is
   enforced by route-level guard middleware** (`guards.ts`, one line per mutating
   route) that reads ids from params/body, resolves ownership via `authz.queries.ts`
   (walks each resource up to its owning campaign/player), and calls the

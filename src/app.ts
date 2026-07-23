@@ -1,3 +1,4 @@
+import cors from "cors";
 import express, { type Express } from "express";
 import { requireAuth } from "./auth/auth.middleware.js";
 import { authRouter } from "./auth/auth.routes.js";
@@ -29,6 +30,19 @@ import { statBlockEntriesRouter } from "./stat-block-entries/stat-block-entries.
 
 export function createApp(): Express {
   const app = express();
+
+  // CORS — required for a browser SPA on another origin (e.g. Vite on :5173).
+  // Auth uses a Bearer header (not cookies), so no credentials are needed and a
+  // wildcard origin is fine by default. Set CORS_ORIGIN (comma-separated) to
+  // restrict to specific origins in production. Handles preflight automatically.
+  const corsOrigin = process.env.CORS_ORIGIN;
+  app.use(
+    cors(
+      corsOrigin
+        ? { origin: corsOrigin.split(",").map((o) => o.trim()) }
+        : undefined,
+    ),
+  );
 
   app.use(express.json());
 
