@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { guardCharacterByBody, guardSpellSlotByParam } from "../auth/guards.js";
 import {
   deleteSpellSlotHandler,
   getSpellSlot,
@@ -9,8 +10,8 @@ import {
 
 export const spellSlotsRouter = Router();
 
-spellSlotsRouter.post("/", postSpellSlot);
+spellSlotsRouter.post("/", guardCharacterByBody, postSpellSlot);
 spellSlotsRouter.get("/", getSpellSlots);
 spellSlotsRouter.get("/:id", getSpellSlot);
-spellSlotsRouter.patch("/:id", patchSpellSlot);
-spellSlotsRouter.delete("/:id", deleteSpellSlotHandler);
+spellSlotsRouter.patch("/:id", guardSpellSlotByParam, patchSpellSlot);
+spellSlotsRouter.delete("/:id", guardSpellSlotByParam, deleteSpellSlotHandler);

@@ -101,6 +101,14 @@ enum CampaignRole {
   PLAYER
 }
 
+// A Player's GLOBAL (system-wide) role, distinct from their per-campaign
+// CampaignRole. ADMIN can CRUD every table; USER is a normal account whose
+// authority comes from campaign membership (DM) and character ownership (player).
+enum SystemRole {
+  USER
+  ADMIN
+}
+
 // Lifecycle of a campaign, for filtering the DM's dashboard.
 enum CampaignStatus {
   PLANNING
@@ -242,6 +250,13 @@ model Player {
   id          String  @id @default(uuid()) @db.Uuid
   username    String  @unique
   displayName String?
+
+  // Auth. `passwordHash` stores a scrypt "salt:hash" (see src/auth/password.ts);
+  // it is nullable so a DM can create a placeholder Player without a login, and
+  // is NEVER selected into any response outside the login lookup. `systemRole`
+  // is the global role — ADMIN bypasses all per-campaign/ownership checks.
+  passwordHash String?
+  systemRole   SystemRole @default(USER)
 
   // A Player's role is per-campaign (DM here, player there), so it lives on the
   // membership join rather than on the Player.

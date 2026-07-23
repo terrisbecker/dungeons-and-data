@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { guardCatalog } from "../auth/guards.js";
 import {
   deleteItemHandler,
   getItem,
@@ -9,8 +10,8 @@ import {
 
 export const itemsRouter = Router();
 
-itemsRouter.post("/", postItem);
+itemsRouter.post("/", guardCatalog, postItem);
 itemsRouter.get("/", getItems);
 itemsRouter.get("/:id", getItem);
-itemsRouter.patch("/:id", patchItem);
-itemsRouter.delete("/:id", deleteItemHandler);
+itemsRouter.patch("/:id", guardCatalog, patchItem);
+itemsRouter.delete("/:id", guardCatalog, deleteItemHandler);

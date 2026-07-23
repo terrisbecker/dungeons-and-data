@@ -2,6 +2,8 @@ import "dotenv/config";
 import {
   Ability,
   ArmorCategory,
+  CampaignRole,
+  CampaignStatus,
   CreatureKind,
   CreatureSize,
   CreatureType,
@@ -12,10 +14,12 @@ import {
   Prisma,
   SpellSchool,
   StatBlockEntryCategory,
+  SystemRole,
   WeaponCategory,
   WeaponProperty,
 } from "@prisma/client";
 import { prisma } from "../src/db.js";
+import { hashPassword } from "../src/auth/password.js";
 
 // Seeds a fully-populated test dataset that touches EVERY table: five
 // character sheets (+ the catalog rows they reference), a nested Location
@@ -51,6 +55,19 @@ const CREATURE_NAMES = [
   "Goblin Cutthroat",
   "Shambling Zombie",
 ];
+
+// The two NPCs are campaign-specific; the three monsters stay shared (null
+// campaignId) to exercise the "shared catalog creature" authorization path.
+const CAMPAIGN_CREATURE_NAMES = [
+  "Seraphina Dawnbringer",
+  "Grumblin Cogwhistle",
+];
+
+// Auth seed handles. The Admin comes from env (ADMIN_USERNAME/ADMIN_PASSWORD);
+// the demo DM and player have fixed dev passwords so the auth paths are testable.
+const DM_USERNAME = "dm_seed";
+const PLAYER_USERNAME = "player_seed";
+const CAMPAIGN_NAME = "The Sunless Citadel";
 
 async function seedCatalog() {
   const spellDefs: Prisma.SpellCreateInput[] = [
@@ -1314,6 +1331,79 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
   });
 }
 
+// Seeds accounts and a demo campaign: an Admin (from env), a Dungeon Master,
+// and a Player, with the DM + Player seated on a fresh campaign. Returns the
+// ids so main() can back-fill ownership onto the seeded characters/creatures/
+// locations. Players are upserted (idempotent); the campaign is recreated fresh.
+async function seedAuth() {
+  const adminUsername = process.env.ADMIN_USERNAME ?? "admin";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin";
+  if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+    console.warn(
+      "ADMIN_USERNAME/ADMIN_PASSWORD not set — seeding admin with defaults admin/admin",
+    );
+  }
+
+  const admin = await prisma.player.upsert({
+    where: { username: adminUsername },
+    update: {
+      systemRole: SystemRole.ADMIN,
+      passwordHash: await hashPassword(adminPassword),
+    },
+    create: {
+      username: adminUsername,
+      displayName: "Seed Admin",
+      systemRole: SystemRole.ADMIN,
+      passwordHash: await hashPassword(adminPassword),
+    },
+    select: { id: true, username: true },
+  });
+
+  const dm = await prisma.player.upsert({
+    where: { username: DM_USERNAME },
+    update: { passwordHash: await hashPassword("dm-dev-password") },
+    create: {
+      username: DM_USERNAME,
+      displayName: "Seed Dungeon Master",
+      passwordHash: await hashPassword("dm-dev-password"),
+    },
+    select: { id: true, username: true },
+  });
+
+  const player = await prisma.player.upsert({
+    where: { username: PLAYER_USERNAME },
+    update: { passwordHash: await hashPassword("player-dev-password") },
+    create: {
+      username: PLAYER_USERNAME,
+      displayName: "Seed Player",
+      passwordHash: await hashPassword("player-dev-password"),
+    },
+    select: { id: true, username: true },
+  });
+
+  const campaign = await prisma.campaign.create({
+    data: {
+      name: CAMPAIGN_NAME,
+      description: "Seed demo campaign for exercising authorization.",
+      status: CampaignStatus.ACTIVE,
+      memberships: {
+        create: [
+          { playerId: dm.id, role: CampaignRole.DUNGEON_MASTER },
+          { playerId: player.id, role: CampaignRole.PLAYER },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  return {
+    admin,
+    dm,
+    player,
+    campaignId: campaign.id,
+  };
+}
+
 async function main() {
   // Clear previously seeded rows (cascades to owned children). Creatures cascade
   // to entries/skills/damage modifiers/inventory/placements; characters cascade
@@ -1328,11 +1418,31 @@ async function main() {
   await prisma.location.deleteMany({
     where: { locationName: { in: LOCATION_NAMES } },
   });
+  // Remove the demo campaign (cascades its memberships); the seeded accounts are
+  // upserted below, so they don't need deleting.
+  await prisma.campaign.deleteMany({ where: { name: CAMPAIGN_NAME } });
 
   const catalog = await seedCatalog();
   await seedCharacters(catalog);
   const locations = await seedLocations();
   await seedCreatures(catalog, locations);
+  const auth = await seedAuth();
+
+  // Back-fill ownership so every authorization path is exercisable: the demo
+  // player owns all seeded characters, the demo campaign owns those characters,
+  // the NPCs, and the locations. The three monsters stay shared (null campaign).
+  await prisma.playerCharacter.updateMany({
+    where: { characterName: { in: CHARACTER_NAMES } },
+    data: { playerId: auth.player.id, campaignId: auth.campaignId },
+  });
+  await prisma.location.updateMany({
+    where: { locationName: { in: LOCATION_NAMES } },
+    data: { campaignId: auth.campaignId },
+  });
+  await prisma.creature.updateMany({
+    where: { name: { in: CAMPAIGN_CREATURE_NAMES } },
+    data: { campaignId: auth.campaignId },
+  });
 
   const created = await prisma.playerCharacter.findMany({
     where: { characterName: { in: CHARACTER_NAMES } },
@@ -1362,6 +1472,12 @@ async function main() {
   for (const l of locs) {
     console.log(`  ${l.id}  ${l.locationName}`);
   }
+
+  console.log("Seeded accounts:");
+  console.log(`  ADMIN   ${auth.admin.username}  (${auth.admin.id})`);
+  console.log(`  DM      ${auth.dm.username}  (${auth.dm.id})`);
+  console.log(`  PLAYER  ${auth.player.username}  (${auth.player.id})`);
+  console.log(`Demo campaign: ${CAMPAIGN_NAME}  (${auth.campaignId})`);
 }
 
 main()

@@ -15,6 +15,7 @@ import {
   optionalInt,
   optionalString,
   optionalStringArray,
+  optionalUuidField,
   requireEnum,
   requireInt,
   requireString,
@@ -110,6 +111,9 @@ function parseOptionalFields(
   set("occupation", optionalString(body, "occupation"));
   set("faction", optionalString(body, "faction"));
   set("race", optionalString(body, "race"));
+
+  // Owning campaign (null = shared catalog creature). Drives authorization.
+  set("campaignId", optionalUuidField(body, "campaignId"));
 
   return data;
 }

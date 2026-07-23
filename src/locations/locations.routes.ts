@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { guardLocationByParamId, guardLocationCreate } from "../auth/guards.js";
 import {
   deleteLocationHandler,
   getLocation,
@@ -9,8 +10,8 @@ import {
 
 export const locationsRouter = Router();
 
-locationsRouter.post("/", postLocation);
+locationsRouter.post("/", guardLocationCreate, postLocation);
 locationsRouter.get("/", getLocations);
 locationsRouter.get("/:id", getLocation);
-locationsRouter.patch("/:id", patchLocation);
-locationsRouter.delete("/:id", deleteLocationHandler);
+locationsRouter.patch("/:id", guardLocationByParamId, patchLocation);
+locationsRouter.delete("/:id", guardLocationByParamId, deleteLocationHandler);

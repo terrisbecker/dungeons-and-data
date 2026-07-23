@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCreatureByBody,
+  guardCreatureByParamCreatureId,
+} from "../auth/guards.js";
+import {
   deleteCreaturePlacementHandler,
   getCreaturePlacement,
   getCreaturePlacements,
@@ -9,14 +13,16 @@ import {
 
 export const creaturePlacementsRouter = Router();
 
-creaturePlacementsRouter.post("/", postCreaturePlacement);
+creaturePlacementsRouter.post("/", guardCreatureByBody, postCreaturePlacement);
 creaturePlacementsRouter.get("/", getCreaturePlacements);
 creaturePlacementsRouter.get("/:creatureId/:locationId", getCreaturePlacement);
 creaturePlacementsRouter.patch(
   "/:creatureId/:locationId",
+  guardCreatureByParamCreatureId,
   patchCreaturePlacement,
 );
 creaturePlacementsRouter.delete(
   "/:creatureId/:locationId",
+  guardCreatureByParamCreatureId,
   deleteCreaturePlacementHandler,
 );

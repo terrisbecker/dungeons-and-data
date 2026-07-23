@@ -23,6 +23,9 @@ function parseOptionalFields(
   if (description !== undefined) data.description = description;
   const parentId = optionalUuidField(body, "parentId");
   if (parentId !== undefined) data.parentId = parentId;
+  // Owning campaign (null = shared location). Drives authorization.
+  const campaignId = optionalUuidField(body, "campaignId");
+  if (campaignId !== undefined) data.campaignId = campaignId;
   return data;
 }
 

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { guardCatalog } from "../auth/guards.js";
 import {
   deleteFeatHandler,
   getFeat,
@@ -9,8 +10,8 @@ import {
 
 export const featsRouter = Router();
 
-featsRouter.post("/", postFeat);
+featsRouter.post("/", guardCatalog, postFeat);
 featsRouter.get("/", getFeats);
 featsRouter.get("/:id", getFeat);
-featsRouter.patch("/:id", patchFeat);
-featsRouter.delete("/:id", deleteFeatHandler);
+featsRouter.patch("/:id", guardCatalog, patchFeat);
+featsRouter.delete("/:id", guardCatalog, deleteFeatHandler);

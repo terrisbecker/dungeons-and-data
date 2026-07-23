@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCharacterByBody,
+  guardCharacterByParamCharacterId,
+} from "../auth/guards.js";
+import {
   deleteCharacterFeatureHandler,
   getCharacterFeature,
   getCharacterFeatures,
@@ -9,14 +13,16 @@ import {
 
 export const characterFeaturesRouter = Router();
 
-characterFeaturesRouter.post("/", postCharacterFeature);
+characterFeaturesRouter.post("/", guardCharacterByBody, postCharacterFeature);
 characterFeaturesRouter.get("/", getCharacterFeatures);
 characterFeaturesRouter.get("/:characterId/:featureId", getCharacterFeature);
 characterFeaturesRouter.patch(
   "/:characterId/:featureId",
+  guardCharacterByParamCharacterId,
   patchCharacterFeature,
 );
 characterFeaturesRouter.delete(
   "/:characterId/:featureId",
+  guardCharacterByParamCharacterId,
   deleteCharacterFeatureHandler,
 );

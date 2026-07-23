@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { guardCatalog } from "../auth/guards.js";
 import {
   deleteSpellHandler,
   getSpell,
@@ -9,8 +10,8 @@ import {
 
 export const spellsRouter = Router();
 
-spellsRouter.post("/", postSpell);
+spellsRouter.post("/", guardCatalog, postSpell);
 spellsRouter.get("/", getSpells);
 spellsRouter.get("/:id", getSpell);
-spellsRouter.patch("/:id", patchSpell);
-spellsRouter.delete("/:id", deleteSpellHandler);
+spellsRouter.patch("/:id", guardCatalog, patchSpell);
+spellsRouter.delete("/:id", guardCatalog, deleteSpellHandler);

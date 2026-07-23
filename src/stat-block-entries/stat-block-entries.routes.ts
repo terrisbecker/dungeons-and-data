@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCreatureByBody,
+  guardStatBlockEntryByParam,
+} from "../auth/guards.js";
+import {
   deleteStatBlockEntryHandler,
   getStatBlockEntries,
   getStatBlockEntry,
@@ -9,8 +13,16 @@ import {
 
 export const statBlockEntriesRouter = Router();
 
-statBlockEntriesRouter.post("/", postStatBlockEntry);
+statBlockEntriesRouter.post("/", guardCreatureByBody, postStatBlockEntry);
 statBlockEntriesRouter.get("/", getStatBlockEntries);
 statBlockEntriesRouter.get("/:id", getStatBlockEntry);
-statBlockEntriesRouter.patch("/:id", patchStatBlockEntry);
-statBlockEntriesRouter.delete("/:id", deleteStatBlockEntryHandler);
+statBlockEntriesRouter.patch(
+  "/:id",
+  guardStatBlockEntryByParam,
+  patchStatBlockEntry,
+);
+statBlockEntriesRouter.delete(
+  "/:id",
+  guardStatBlockEntryByParam,
+  deleteStatBlockEntryHandler,
+);

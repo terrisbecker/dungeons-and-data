@@ -1,4 +1,9 @@
+import cors from "cors";
 import express, { type Express } from "express";
+import { requireAuth } from "./auth/auth.middleware.js";
+import { authRouter } from "./auth/auth.routes.js";
+import { campaignMembershipsRouter } from "./campaign-memberships/campaign-memberships.routes.js";
+import { campaignsRouter } from "./campaigns/campaigns.routes.js";
 import { characterClassesRouter } from "./character-classes/character-classes.routes.js";
 import { characterConditionsRouter } from "./character-conditions/character-conditions.routes.js";
 import { characterFeatsRouter } from "./character-feats/character-feats.routes.js";
@@ -17,6 +22,7 @@ import { errorMiddleware } from "./http/error.middleware.js";
 import { inventoryItemsRouter } from "./inventory-items/inventory-items.routes.js";
 import { itemsRouter } from "./items/items.routes.js";
 import { locationsRouter } from "./locations/locations.routes.js";
+import { playersRouter } from "./players/players.routes.js";
 import { proficienciesRouter } from "./proficiencies/proficiencies.routes.js";
 import { spellSlotsRouter } from "./spell-slots/spell-slots.routes.js";
 import { spellsRouter } from "./spells/spells.routes.js";
@@ -25,11 +31,32 @@ import { statBlockEntriesRouter } from "./stat-block-entries/stat-block-entries.
 export function createApp(): Express {
   const app = express();
 
+  // CORS — required for a browser SPA on another origin (e.g. Vite on :5173).
+  // Auth uses a Bearer header (not cookies), so no credentials are needed and a
+  // wildcard origin is fine by default. Set CORS_ORIGIN (comma-separated) to
+  // restrict to specific origins in production. Handles preflight automatically.
+  const corsOrigin = process.env.CORS_ORIGIN;
+  app.use(
+    cors(
+      corsOrigin
+        ? { origin: corsOrigin.split(",").map((o) => o.trim()) }
+        : undefined,
+    ),
+  );
+
   app.use(express.json());
 
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
   });
+
+  // Public auth routes (register/login) — mounted BEFORE the global gate.
+  app.use("/auth", authRouter);
+
+  // Everything below requires a valid JWT. Any authenticated user may READ any
+  // resource; write access is enforced per-route by the guards in
+  // src/auth/guards.js. Register/login and /health stay public above.
+  app.use(requireAuth);
 
   // PlayerCharacter hub and its owned tables.
   app.use("/characters", charactersRouter);
@@ -59,6 +86,11 @@ export function createApp(): Express {
 
   // Locations (nested hierarchy; creatures are placed here).
   app.use("/locations", locationsRouter);
+
+  // Accounts, campaigns, and the membership join that assigns DM/player roles.
+  app.use("/players", playersRouter);
+  app.use("/campaigns", campaignsRouter);
+  app.use("/campaign-memberships", campaignMembershipsRouter);
 
   // Central error handler — must be registered last.
   app.use(errorMiddleware);
