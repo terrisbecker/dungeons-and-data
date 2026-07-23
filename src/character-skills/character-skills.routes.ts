@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCharacterByBody,
+  guardCharacterSkillByParam,
+} from "../auth/guards.js";
+import {
   deleteCharacterSkillHandler,
   getCharacterSkill,
   getCharacterSkills,
@@ -9,8 +13,16 @@ import {
 
 export const characterSkillsRouter = Router();
 
-characterSkillsRouter.post("/", postCharacterSkill);
+characterSkillsRouter.post("/", guardCharacterByBody, postCharacterSkill);
 characterSkillsRouter.get("/", getCharacterSkills);
 characterSkillsRouter.get("/:id", getCharacterSkill);
-characterSkillsRouter.patch("/:id", patchCharacterSkill);
-characterSkillsRouter.delete("/:id", deleteCharacterSkillHandler);
+characterSkillsRouter.patch(
+  "/:id",
+  guardCharacterSkillByParam,
+  patchCharacterSkill,
+);
+characterSkillsRouter.delete(
+  "/:id",
+  guardCharacterSkillByParam,
+  deleteCharacterSkillHandler,
+);

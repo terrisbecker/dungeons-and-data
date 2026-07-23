@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { guardCatalog } from "../auth/guards.js";
 import {
   deleteFeatureHandler,
   getFeature,
@@ -9,8 +10,8 @@ import {
 
 export const featuresRouter = Router();
 
-featuresRouter.post("/", postFeature);
+featuresRouter.post("/", guardCatalog, postFeature);
 featuresRouter.get("/", getFeatures);
 featuresRouter.get("/:id", getFeature);
-featuresRouter.patch("/:id", patchFeature);
-featuresRouter.delete("/:id", deleteFeatureHandler);
+featuresRouter.patch("/:id", guardCatalog, patchFeature);
+featuresRouter.delete("/:id", guardCatalog, deleteFeatureHandler);

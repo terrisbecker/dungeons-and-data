@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCharacterByBody,
+  guardCharacterConditionByParam,
+} from "../auth/guards.js";
+import {
   deleteCharacterConditionHandler,
   getCharacterCondition,
   getCharacterConditions,
@@ -9,8 +13,20 @@ import {
 
 export const characterConditionsRouter = Router();
 
-characterConditionsRouter.post("/", postCharacterCondition);
+characterConditionsRouter.post(
+  "/",
+  guardCharacterByBody,
+  postCharacterCondition,
+);
 characterConditionsRouter.get("/", getCharacterConditions);
 characterConditionsRouter.get("/:id", getCharacterCondition);
-characterConditionsRouter.patch("/:id", patchCharacterCondition);
-characterConditionsRouter.delete("/:id", deleteCharacterConditionHandler);
+characterConditionsRouter.patch(
+  "/:id",
+  guardCharacterConditionByParam,
+  patchCharacterCondition,
+);
+characterConditionsRouter.delete(
+  "/:id",
+  guardCharacterConditionByParam,
+  deleteCharacterConditionHandler,
+);

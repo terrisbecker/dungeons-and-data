@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCharacterByBody,
+  guardProficiencyByParam,
+} from "../auth/guards.js";
+import {
   deleteProficiencyHandler,
   getProficiencies,
   getProficiency,
@@ -9,8 +13,12 @@ import {
 
 export const proficienciesRouter = Router();
 
-proficienciesRouter.post("/", postProficiency);
+proficienciesRouter.post("/", guardCharacterByBody, postProficiency);
 proficienciesRouter.get("/", getProficiencies);
 proficienciesRouter.get("/:id", getProficiency);
-proficienciesRouter.patch("/:id", patchProficiency);
-proficienciesRouter.delete("/:id", deleteProficiencyHandler);
+proficienciesRouter.patch("/:id", guardProficiencyByParam, patchProficiency);
+proficienciesRouter.delete(
+  "/:id",
+  guardProficiencyByParam,
+  deleteProficiencyHandler,
+);

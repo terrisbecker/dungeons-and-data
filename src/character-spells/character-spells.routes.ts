@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCharacterByBody,
+  guardCharacterByParamCharacterId,
+} from "../auth/guards.js";
+import {
   deleteCharacterSpellHandler,
   getCharacterSpell,
   getCharacterSpells,
@@ -9,11 +13,16 @@ import {
 
 export const characterSpellsRouter = Router();
 
-characterSpellsRouter.post("/", postCharacterSpell);
+characterSpellsRouter.post("/", guardCharacterByBody, postCharacterSpell);
 characterSpellsRouter.get("/", getCharacterSpells);
 characterSpellsRouter.get("/:characterId/:spellId", getCharacterSpell);
-characterSpellsRouter.patch("/:characterId/:spellId", patchCharacterSpell);
+characterSpellsRouter.patch(
+  "/:characterId/:spellId",
+  guardCharacterByParamCharacterId,
+  patchCharacterSpell,
+);
 characterSpellsRouter.delete(
   "/:characterId/:spellId",
+  guardCharacterByParamCharacterId,
   deleteCharacterSpellHandler,
 );

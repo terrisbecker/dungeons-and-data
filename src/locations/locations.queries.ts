@@ -14,6 +14,7 @@ const locationSelect = {
   locationName: true,
   description: true,
   type: true,
+  campaignId: true,
   parentId: true,
   parent: { select: locationSummarySelect },
   children: {

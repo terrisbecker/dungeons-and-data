@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCharacterByParamId,
+  guardCharacterCreate,
+} from "../auth/guards.js";
+import {
   deleteCharacter,
   getCharacter,
   getCharacters,
@@ -10,9 +14,9 @@ import {
 
 export const charactersRouter = Router();
 
-charactersRouter.post("/", postCharacter);
+charactersRouter.post("/", guardCharacterCreate, postCharacter);
 charactersRouter.get("/", getCharacters);
 charactersRouter.get("/:id", getCharacter);
 charactersRouter.get("/:id/sheet", getCharacterSheet);
-charactersRouter.patch("/:id", patchCharacter);
-charactersRouter.delete("/:id", deleteCharacter);
+charactersRouter.patch("/:id", guardCharacterByParamId, patchCharacter);
+charactersRouter.delete("/:id", guardCharacterByParamId, deleteCharacter);

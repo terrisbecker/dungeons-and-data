@@ -51,6 +51,7 @@ const creatureScalarSelect = {
   occupation: true,
   faction: true,
   race: true,
+  campaignId: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.CreatureSelect;

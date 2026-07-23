@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardInventoryByParamId,
+  guardInventoryCreate,
+} from "../auth/guards.js";
+import {
   deleteInventoryItemHandler,
   getInventoryItem,
   getInventoryItems,
@@ -9,8 +13,12 @@ import {
 
 export const inventoryItemsRouter = Router();
 
-inventoryItemsRouter.post("/", postInventoryItem);
+inventoryItemsRouter.post("/", guardInventoryCreate, postInventoryItem);
 inventoryItemsRouter.get("/", getInventoryItems);
 inventoryItemsRouter.get("/:id", getInventoryItem);
-inventoryItemsRouter.patch("/:id", patchInventoryItem);
-inventoryItemsRouter.delete("/:id", deleteInventoryItemHandler);
+inventoryItemsRouter.patch("/:id", guardInventoryByParamId, patchInventoryItem);
+inventoryItemsRouter.delete(
+  "/:id",
+  guardInventoryByParamId,
+  deleteInventoryItemHandler,
+);

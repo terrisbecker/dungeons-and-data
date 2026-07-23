@@ -40,39 +40,80 @@ There is no test setup yet. Copy `.env.example` to `.env`, then
 `@check`): `npx prisma migrate dev --name <name> --create-only`, hand-edit the
 generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
-## Current state (as of 2026-07-22)
+## Current state (as of 2026-07-23)
 
 Data model complete; the full layered stack for **all PlayerCharacter-related
-data** and **all Creature (NPC/Monster) + Location data** is now implemented.
-Working on branch `database/mosters-and-npc`.
+data** and **all Creature (NPC/Monster) + Location data** is implemented, plus a
+**JWT auth + role-based authorization** layer and the `Player`/`Campaign`/
+`CampaignMembership` CRUD that backs it. Working on branch `feat/auth`.
 
 **Implemented:**
 
 - `src/index.ts` — loads env, starts the HTTP server (`PORT`, default 3000).
-- `src/app.ts` — `createApp()` mounts `express.json()`, `GET /health`, every
-  topic router, then the central error middleware (registered last).
+- `src/app.ts` — `createApp()` mounts `express.json()`, the public `GET /health`
+  and `/auth` routes, then the global `requireAuth` gate, then every topic
+  router, then the central error middleware (registered last). Order matters:
+  register/login and health stay above `requireAuth`; everything below needs a
+  valid JWT.
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
 - `prisma/migrations/…_init` — squashed baseline migration, applied. The earlier
   incremental migrations (`…_init`, `…_flesh_out_pc_catalogs`,
   `…_break_out_item_stats`, `…_flesh_out_creatures`) were collapsed into one
-  fresh `…_init` reflecting the schema (23 tables). The baseline still *creates*
+  fresh `…_init` reflecting the schema (23 tables). The baseline still _creates_
   three hand-added CHECK constraints (Prisma has no `@check`), but a follow-up
   migration (`…_drop_ability_score_checks`) drops two of them, so only **one**
   CHECK is live: the exactly-one-owner rule on `InventoryItem` (`characterId`
   XOR `creatureId`) — a relational invariant worth guarding in the DB. The
   ability-score 1–30 bounds on `PlayerCharacter`/`Creature` are now owned solely
-  by the service layer (a 5e *rules* limit, kept relaxable for homebrew).
+  by the service layer (a 5e _rules_ limit, kept relaxable for homebrew).
   **Prefer plain additive `prisma migrate dev` going forward — do NOT rebaseline
   the history** (the old squash-and-re-append-CHECKs dance is what forced
   hand-written SQL each time; additive migrations leave the existing constraint
   untouched and stay fully Prisma-generated). The only remaining hand-SQL case
-  is adding/removing a CHECK, since Prisma can't diff them.
+  is adding/removing a CHECK, since Prisma can't diff them. A later additive
+  `…_add_auth_to_player` migration followed exactly this discipline (added
+  `passwordHash`/`systemRole` to `Player`, and created the `Player`/`Campaign`/
+  `CampaignMembership` tables that were in the schema but never migrated).
 - **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
-  `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
-  `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
-  responses), and `validate.ts` (hand-rolled primitive field parsers — no
-  validation library, matching the "generic errors for now" stance).
+  `badRequest`/`notFound`/`conflict`/`unauthorized`/`forbidden`),
+  `prisma-errors.ts` (`mapPrismaError`: `P2025`→404, `P2002`→409, `P2003`→400),
+  `error.middleware.ts` (generic responses), and `validate.ts` (hand-rolled
+  primitive field parsers — no validation library, matching the "generic errors
+  for now" stance).
+- **Auth + authorization** (`src/auth/`): the `Player` model doubles as the user
+  account (no separate `User` table). Three roles:
+  - **Admin** — global; `SystemRole.ADMIN` on `Player`, carried in the JWT.
+  - **Dungeon Master** — per-campaign; a `CampaignMembership` with
+    `role = DUNGEON_MASTER`. Resolved live from the DB per request (not in the
+    token) so membership changes take effect immediately.
+  - **Player** — the default authenticated user; may CRUD their own
+    character(s) (`PlayerCharacter.playerId === self`). Any authed user may READ
+    everything.
+
+  Passwords are hashed with the built-in `crypto.scrypt` (`password.ts`, stored
+  `salt:hash`, no dependency); JWTs use `jsonwebtoken` (`jwt.ts`, fail-fast on
+  `JWT_SECRET` like `db.ts`, `JWT_EXPIRES_IN` default `7d`). `auth.middleware.ts`
+  exposes `requireAuth` (Bearer → `req.auth`); public `authRouter` serves
+  `POST /auth/register` (always a plain `USER`) and `/login`. **Authorization is
+  enforced by route-level guard middleware** (`guards.ts`, one line per mutating
+  route) that reads ids from params/body, resolves ownership via `authz.queries.ts`
+  (walks each resource up to its owning campaign/player), and calls the
+  assertions in `authz.ts` — so the ~20 existing business services stay
+  untouched. Shared catalogs (`Item`/`Spell`/`Feat`/`Feature` and null-campaign
+  `Creature`/`Location`) are writable by **Admin or any DM**
+  (`assertCanWriteCatalog`); a specific campaign's data by **Admin or that
+  campaign's DM**; a character (and its owned children) by **Admin, the
+  campaign's DM, or the owning player**.
+
+- **Player / Campaign / CampaignMembership CRUD** (`players/`, `campaigns/`,
+  `campaign-memberships/`): account creation lives in `/auth/register`;
+  `players/` manages existing rows (never selects `passwordHash`; only Admin
+  changes a `systemRole` or deletes). Creating a campaign auto-seats the creator
+  as its `DUNGEON_MASTER`. Membership edits/removal enforce the **≥1 DM per
+  campaign** invariant in the service layer (refuse to demote/remove the last
+  DM → 409). `campaignId` is now settable on `creatures`/`locations` so
+  campaign-scoping actually persists.
 - **PlayerCharacter CRUD across 15 topic folders**, each with the four
   `[topic].[layer].ts` files (flat, per the `monsters/` convention; top-level
   URLs with `characterId` in the body/query):
@@ -118,20 +159,26 @@ Working on branch `database/mosters-and-npc`.
   catalog rows, 5 fully-populated test characters, a nested `Location` hierarchy
   (realm → region → town/dungeon → building), and 5 `Creature`s (2 NPCs, 3
   monsters incl. a legendary+lair Ancient Red Dragon) with stat-block entries,
-  skills, damage modifiers, owned inventory, and location placements.
-  `docs/character-sheet.md` and `docs/creature-stat-block.md` document the
-  character-sheet and creature stat-block curls.
+  skills, damage modifiers, owned inventory, and location placements. It also
+  seeds **auth fixtures**: an Admin (from `ADMIN_USERNAME`/`ADMIN_PASSWORD`), a
+  demo DM (`dm_seed`) and player (`player_seed`), and a demo `Campaign` with both
+  seated — then back-fills ownership onto the characters/locations and the two
+  NPCs (the three monsters stay shared/null-campaign) so every authorization path
+  is exercisable. `docs/character-sheet.md` and `docs/creature-stat-block.md`
+  document the character-sheet and creature stat-block curls.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
   `no-unused-vars` `argsIgnorePattern: "^_"`), `.prettierrc.json`,
-  `prisma.config.ts`, `.env.example`.
+  `prisma.config.ts`, `.env.example` (now also documents `JWT_SECRET`,
+  `JWT_EXPIRES_IN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`).
 
 **Not yet done:**
 
 - No economy/pricing layer (shops, chests, buy/sell modifiers, currency
   conversion) on top of the `Item.baseValueCp` catalog reference value.
-- No auth, no pagination.
+- No pagination. Auth is JWT-only (no refresh tokens, no revocation/blocklist —
+  a token stays valid until it expires even if the account is later demoted).
 - No tests, no CI.
 
 ## Architecture — layered backend
@@ -160,11 +207,24 @@ unconstrained to keep **homebrew** open.
 **Enums** encode the fixed 5e sets — `Ability`, `Alignment`, `Skill` (18,
 each commented with its governing ability), `SkillProficiency`
 (PROFICIENT/EXPERTISE/HALF), `SpellSchool`, `FeatureSource`, `RestType`,
-`CreatureSize`. Everything homebrew-sensitive (race, class name, item/condition
+`CreatureSize` — plus the org/auth sets: `SystemRole` (USER/ADMIN, the global
+role), `CampaignRole` (DUNGEON_MASTER/PLAYER, the per-campaign role), and
+`CampaignStatus`. Everything homebrew-sensitive (race, class name, item/condition
 names, proficiency names) stays free-text on purpose.
 
 Models currently defined:
 
+- **Player** — a real person / user account (distinct from `PlayerCharacter`,
+  the in-world hero). Doubles as the auth account: `username` (unique handle),
+  `passwordHash` (nullable — a DM can make a login-less placeholder; never
+  selected outside login), and `systemRole`. Owns characters and joins campaigns
+  via `CampaignMembership`.
+- **Campaign** — one running game; the scope for campaign-owned `PlayerCharacter`,
+  `Location`, and `Creature` rows (shared catalogs are NOT scoped). The DM is not
+  a column — it is the membership whose role is `DUNGEON_MASTER` (supports
+  co-DMs). "≥1 DM per campaign" is a service-layer invariant.
+- **CampaignMembership** — a Player's seat at a Campaign, carrying their
+  `CampaignRole`. Unique on `(campaignId, playerId)`.
 - **Location** — self-referencing hierarchy via `parentId` /
   `LocationHierarchy` relation (realm → region → town → building → cottage).
   Occupants attach through explicit join models.
@@ -173,9 +233,10 @@ Models currently defined:
   combat (HP, `hitPointMaxModifier`, AC, death saves); movement
   (`speed`/`flySpeed`/`swimSpeed`/`climbSpeed`) and `darkvision`; concentration
   pointer; currency (5e coin types); the four roleplay boxes
-  (`traits`/`ideals`/`bonds`/`flaws`); `deletedAt` soft delete. Related to
-  skills, items, classes, proficiencies, spells, feats, features, conditions,
-  resources, and spell slots.
+  (`traits`/`ideals`/`bonds`/`flaws`); `deletedAt` soft delete. Nullable
+  `playerId`/`campaignId` (both `SetNull` on delete) tie it to its owner and game
+  — the pair authorization walks up to. Related to skills, items, classes,
+  proficiencies, spells, feats, features, conditions, resources, and spell slots.
 - **CharacterClass** — one row per class a character has levels in (supports
   **multiclassing**); carries `hitDieSize`/`hitDiceUsed` (hit dice are
   per-class) and `spellcastingAbility`; unique on `(characterId, className)`.
@@ -233,7 +294,10 @@ Models currently defined:
   structured attack columns later like `Spell`'s combat hooks),
   **CreatureSkill** (mirrors `CharacterSkill`), **CreatureDamageModifier**
   (vuln/resist/immunity + optional `damageType`/qualifier `note`). Spellcasting
-  is just a `TRAIT` entry for now (no creature↔`Spell` join yet).
+  is just a `TRAIT` entry for now (no creature↔`Spell` join yet). Nullable
+  `campaignId` (`Cascade` on delete): null = a shared catalog creature (writable
+  by Admin or any DM); non-null = campaign-owned (writable by that campaign's
+  DM). `Location` carries the same nullable `campaignId` with the same rule.
 - **CreaturePlacement** — the single explicit M2M join model between `Creature`
   and `Location` (replaced the separate `NpcPlacement`/`MonsterPlacement`),
   carrying per-placement `quantity`/`notes`.
@@ -321,7 +385,14 @@ next(err)` wrappers (though explicit error handling is still fine).
 
 - Follow the `[topic].[layer].ts` naming and one-folder-per-topic layout.
 - Keep the layer boundaries: routes → controllers → services → queries → Prisma.
-  Don't call Prisma directly from controllers or routes.
+  Don't call Prisma directly from controllers or routes. (Authorization is the
+  one intentional exception: `src/auth/guards.ts` middleware calls the `authz`
+  service/query layer directly, keeping auth out of the business services.)
+- **Every new mutating route (POST/PATCH/DELETE) needs an authorization guard**
+  from `src/auth/guards.js`, wired in the `.routes.ts` file between the path and
+  handler; GET routes need none (the global `requireAuth` already covers reads).
+  Reuse an existing guard or add one there and a matching resolver in
+  `authz.queries.ts` — don't scatter auth checks into services.
 - Run `npm run lint` and `npm run format` before finishing a change.
 - Match existing style: double quotes, semicolons, trailing commas, 2-space
   indent, 80-col width (enforced by Prettier).

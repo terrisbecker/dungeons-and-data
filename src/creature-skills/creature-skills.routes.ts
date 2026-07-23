@@ -1,5 +1,9 @@
 import { Router } from "express";
 import {
+  guardCreatureByBody,
+  guardCreatureSkillByParam,
+} from "../auth/guards.js";
+import {
   deleteCreatureSkillHandler,
   getCreatureSkill,
   getCreatureSkills,
@@ -9,8 +13,16 @@ import {
 
 export const creatureSkillsRouter = Router();
 
-creatureSkillsRouter.post("/", postCreatureSkill);
+creatureSkillsRouter.post("/", guardCreatureByBody, postCreatureSkill);
 creatureSkillsRouter.get("/", getCreatureSkills);
 creatureSkillsRouter.get("/:id", getCreatureSkill);
-creatureSkillsRouter.patch("/:id", patchCreatureSkill);
-creatureSkillsRouter.delete("/:id", deleteCreatureSkillHandler);
+creatureSkillsRouter.patch(
+  "/:id",
+  guardCreatureSkillByParam,
+  patchCreatureSkill,
+);
+creatureSkillsRouter.delete(
+  "/:id",
+  guardCreatureSkillByParam,
+  deleteCreatureSkillHandler,
+);
