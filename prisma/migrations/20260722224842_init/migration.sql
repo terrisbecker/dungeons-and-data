@@ -40,6 +40,18 @@ CREATE TYPE "ArmorCategory" AS ENUM ('LIGHT', 'MEDIUM', 'HEAVY', 'SHIELD');
 -- CreateEnum
 CREATE TYPE "DamageType" AS ENUM ('ACID', 'BLUDGEONING', 'COLD', 'FIRE', 'FORCE', 'LIGHTNING', 'NECROTIC', 'PIERCING', 'POISON', 'PSYCHIC', 'RADIANT', 'SLASHING', 'THUNDER');
 
+-- CreateEnum
+CREATE TYPE "CreatureKind" AS ENUM ('NPC', 'MONSTER');
+
+-- CreateEnum
+CREATE TYPE "CreatureType" AS ENUM ('ABERRATION', 'BEAST', 'CELESTIAL', 'CONSTRUCT', 'DRAGON', 'ELEMENTAL', 'FEY', 'FIEND', 'GIANT', 'HUMANOID', 'MONSTROSITY', 'OOZE', 'PLANT', 'UNDEAD');
+
+-- CreateEnum
+CREATE TYPE "StatBlockEntryCategory" AS ENUM ('TRAIT', 'ACTION', 'BONUS_ACTION', 'REACTION', 'LEGENDARY_ACTION', 'MYTHIC_ACTION', 'LAIR_ACTION', 'REGIONAL_EFFECT');
+
+-- CreateEnum
+CREATE TYPE "DamageModifierKind" AS ENUM ('VULNERABILITY', 'RESISTANCE', 'IMMUNITY');
+
 -- CreateTable
 CREATE TABLE "Location" (
     "id" UUID NOT NULL,
@@ -96,6 +108,9 @@ CREATE TABLE "PlayerCharacter" (
     "description" TEXT,
     "background" TEXT,
     "traits" TEXT,
+    "ideals" TEXT,
+    "bonds" TEXT,
+    "flaws" TEXT,
     "playerId" UUID,
     "campaignId" UUID,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -177,21 +192,35 @@ CREATE TABLE "Item" (
     "stackable" BOOLEAN NOT NULL DEFAULT false,
     "consumable" BOOLEAN NOT NULL DEFAULT false,
     "baseValueCp" INTEGER,
-    "weaponCategory" "WeaponCategory",
-    "damageDice" TEXT,
-    "damageType" "DamageType",
+
+    CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WeaponStats" (
+    "itemId" UUID NOT NULL,
+    "weaponCategory" "WeaponCategory" NOT NULL,
+    "damageDice" TEXT NOT NULL,
+    "damageType" "DamageType" NOT NULL,
     "versatileDamage" TEXT,
     "weaponProperties" "WeaponProperty"[],
     "rangeNormal" INTEGER,
     "rangeLong" INTEGER,
-    "armorCategory" "ArmorCategory",
-    "baseArmorClass" INTEGER,
-    "addDexToArmorClass" BOOLEAN,
+
+    CONSTRAINT "WeaponStats_pkey" PRIMARY KEY ("itemId")
+);
+
+-- CreateTable
+CREATE TABLE "ArmorStats" (
+    "itemId" UUID NOT NULL,
+    "armorCategory" "ArmorCategory" NOT NULL,
+    "baseArmorClass" INTEGER NOT NULL,
+    "addDexToArmorClass" BOOLEAN NOT NULL DEFAULT false,
     "maxDexBonus" INTEGER,
     "strengthRequirement" INTEGER,
     "stealthDisadvantage" BOOLEAN NOT NULL DEFAULT false,
 
-    CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "ArmorStats_pkey" PRIMARY KEY ("itemId")
 );
 
 -- CreateTable
@@ -199,7 +228,7 @@ CREATE TABLE "InventoryItem" (
     "id" UUID NOT NULL,
     "itemId" UUID NOT NULL,
     "characterId" UUID,
-    "npcId" UUID,
+    "creatureId" UUID,
     "quantity" INTEGER NOT NULL DEFAULT 1,
     "equipped" BOOLEAN NOT NULL DEFAULT false,
     "attuned" BOOLEAN NOT NULL DEFAULT false,
@@ -208,40 +237,102 @@ CREATE TABLE "InventoryItem" (
 );
 
 -- CreateTable
-CREATE TABLE "NPC" (
+CREATE TABLE "Creature" (
     "id" UUID NOT NULL,
+    "kind" "CreatureKind" NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
+    "size" "CreatureSize" NOT NULL DEFAULT 'MEDIUM',
+    "creatureType" "CreatureType",
+    "typeTags" TEXT[],
+    "alignment" "Alignment",
+    "alignmentNote" TEXT,
+    "armorClass" INTEGER NOT NULL,
+    "armorClassNote" TEXT,
+    "hitPoints" INTEGER NOT NULL,
+    "hitDice" TEXT,
+    "speed" INTEGER NOT NULL DEFAULT 30,
+    "flySpeed" INTEGER,
+    "swimSpeed" INTEGER,
+    "climbSpeed" INTEGER,
+    "burrowSpeed" INTEGER,
+    "hover" BOOLEAN NOT NULL DEFAULT false,
+    "strength" SMALLINT NOT NULL,
+    "dexterity" SMALLINT NOT NULL,
+    "constitution" SMALLINT NOT NULL,
+    "intelligence" SMALLINT NOT NULL,
+    "wisdom" SMALLINT NOT NULL,
+    "charisma" SMALLINT NOT NULL,
+    "strengthSaveProf" BOOLEAN NOT NULL DEFAULT false,
+    "dexteritySaveProf" BOOLEAN NOT NULL DEFAULT false,
+    "constitutionSaveProf" BOOLEAN NOT NULL DEFAULT false,
+    "intelligenceSaveProf" BOOLEAN NOT NULL DEFAULT false,
+    "wisdomSaveProf" BOOLEAN NOT NULL DEFAULT false,
+    "charismaSaveProf" BOOLEAN NOT NULL DEFAULT false,
+    "darkvision" INTEGER,
+    "blindsight" INTEGER,
+    "blindBeyond" BOOLEAN NOT NULL DEFAULT false,
+    "tremorsense" INTEGER,
+    "truesight" INTEGER,
+    "languages" TEXT,
+    "conditionImmunities" TEXT[],
+    "challengeRating" DECIMAL(5,3),
+    "experiencePoints" INTEGER,
+    "legendaryActionsPerRound" INTEGER,
+    "hasLair" BOOLEAN NOT NULL DEFAULT false,
+    "environment" TEXT[],
+    "source" TEXT,
+    "occupation" TEXT,
+    "faction" TEXT,
+    "race" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "NPC_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Creature_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Monster" (
+CREATE TABLE "StatBlockEntry" (
     "id" UUID NOT NULL,
+    "creatureId" UUID NOT NULL,
+    "category" "StatBlockEntryCategory" NOT NULL,
     "name" TEXT NOT NULL,
-    "description" TEXT,
+    "description" TEXT NOT NULL,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "legendaryCost" INTEGER,
 
-    CONSTRAINT "Monster_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "StatBlockEntry_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "NpcPlacement" (
-    "npcId" UUID NOT NULL,
-    "locationId" UUID NOT NULL,
-    "notes" TEXT,
+CREATE TABLE "CreatureSkill" (
+    "id" UUID NOT NULL,
+    "creatureId" UUID NOT NULL,
+    "skill" "Skill" NOT NULL,
+    "proficiency" "SkillProficiency" NOT NULL DEFAULT 'PROFICIENT',
 
-    CONSTRAINT "NpcPlacement_pkey" PRIMARY KEY ("npcId","locationId")
+    CONSTRAINT "CreatureSkill_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "MonsterPlacement" (
-    "monsterId" UUID NOT NULL,
+CREATE TABLE "CreatureDamageModifier" (
+    "id" UUID NOT NULL,
+    "creatureId" UUID NOT NULL,
+    "kind" "DamageModifierKind" NOT NULL,
+    "damageType" "DamageType",
+    "note" TEXT,
+
+    CONSTRAINT "CreatureDamageModifier_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CreaturePlacement" (
+    "creatureId" UUID NOT NULL,
     "locationId" UUID NOT NULL,
     "quantity" INTEGER NOT NULL DEFAULT 1,
     "notes" TEXT,
 
-    CONSTRAINT "MonsterPlacement_pkey" PRIMARY KEY ("monsterId","locationId")
+    CONSTRAINT "CreaturePlacement_pkey" PRIMARY KEY ("creatureId","locationId")
 );
 
 -- CreateTable
@@ -251,6 +342,19 @@ CREATE TABLE "Spell" (
     "level" INTEGER NOT NULL,
     "school" "SpellSchool",
     "description" TEXT,
+    "castingTime" TEXT,
+    "range" TEXT,
+    "duration" TEXT,
+    "higherLevel" TEXT,
+    "verbal" BOOLEAN NOT NULL DEFAULT false,
+    "somatic" BOOLEAN NOT NULL DEFAULT false,
+    "material" BOOLEAN NOT NULL DEFAULT false,
+    "materialComponent" TEXT,
+    "concentration" BOOLEAN NOT NULL DEFAULT false,
+    "ritual" BOOLEAN NOT NULL DEFAULT false,
+    "savingThrow" "Ability",
+    "damageType" "DamageType",
+    "isAttack" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Spell_pkey" PRIMARY KEY ("id")
 );
@@ -261,6 +365,7 @@ CREATE TABLE "CharacterSpell" (
     "spellId" UUID NOT NULL,
     "known" BOOLEAN NOT NULL DEFAULT true,
     "prepared" BOOLEAN NOT NULL DEFAULT false,
+    "alwaysPrepared" BOOLEAN NOT NULL DEFAULT false,
     "sourceClass" TEXT,
 
     CONSTRAINT "CharacterSpell_pkey" PRIMARY KEY ("characterId","spellId")
@@ -271,6 +376,9 @@ CREATE TABLE "Feat" (
     "id" UUID NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT,
+    "prerequisite" TEXT,
+    "repeatable" BOOLEAN NOT NULL DEFAULT false,
+    "grantsAbilityScoreIncrease" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "Feat_pkey" PRIMARY KEY ("id")
 );
@@ -289,6 +397,8 @@ CREATE TABLE "Feature" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "source" "FeatureSource" NOT NULL,
+    "level" INTEGER,
+    "subtype" TEXT,
 
     CONSTRAINT "Feature_pkey" PRIMARY KEY ("id")
 );
@@ -350,7 +460,22 @@ CREATE INDEX "InventoryItem_itemId_idx" ON "InventoryItem"("itemId");
 CREATE INDEX "InventoryItem_characterId_idx" ON "InventoryItem"("characterId");
 
 -- CreateIndex
-CREATE INDEX "InventoryItem_npcId_idx" ON "InventoryItem"("npcId");
+CREATE INDEX "InventoryItem_creatureId_idx" ON "InventoryItem"("creatureId");
+
+-- CreateIndex
+CREATE INDEX "Creature_kind_idx" ON "Creature"("kind");
+
+-- CreateIndex
+CREATE INDEX "Creature_creatureType_idx" ON "Creature"("creatureType");
+
+-- CreateIndex
+CREATE INDEX "StatBlockEntry_creatureId_idx" ON "StatBlockEntry"("creatureId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CreatureSkill_creatureId_skill_key" ON "CreatureSkill"("creatureId", "skill");
+
+-- CreateIndex
+CREATE INDEX "CreatureDamageModifier_creatureId_idx" ON "CreatureDamageModifier"("creatureId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Spell_name_key" ON "Spell"("name");
@@ -383,25 +508,34 @@ ALTER TABLE "Proficiency" ADD CONSTRAINT "Proficiency_characterId_fkey" FOREIGN 
 ALTER TABLE "CharacterSkill" ADD CONSTRAINT "CharacterSkill_characterId_fkey" FOREIGN KEY ("characterId") REFERENCES "PlayerCharacter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "WeaponStats" ADD CONSTRAINT "WeaponStats_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ArmorStats" ADD CONSTRAINT "ArmorStats_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "InventoryItem" ADD CONSTRAINT "InventoryItem_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "InventoryItem" ADD CONSTRAINT "InventoryItem_characterId_fkey" FOREIGN KEY ("characterId") REFERENCES "PlayerCharacter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "InventoryItem" ADD CONSTRAINT "InventoryItem_npcId_fkey" FOREIGN KEY ("npcId") REFERENCES "NPC"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "InventoryItem" ADD CONSTRAINT "InventoryItem_creatureId_fkey" FOREIGN KEY ("creatureId") REFERENCES "Creature"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "NpcPlacement" ADD CONSTRAINT "NpcPlacement_npcId_fkey" FOREIGN KEY ("npcId") REFERENCES "NPC"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "StatBlockEntry" ADD CONSTRAINT "StatBlockEntry_creatureId_fkey" FOREIGN KEY ("creatureId") REFERENCES "Creature"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "NpcPlacement" ADD CONSTRAINT "NpcPlacement_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CreatureSkill" ADD CONSTRAINT "CreatureSkill_creatureId_fkey" FOREIGN KEY ("creatureId") REFERENCES "Creature"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MonsterPlacement" ADD CONSTRAINT "MonsterPlacement_monsterId_fkey" FOREIGN KEY ("monsterId") REFERENCES "Monster"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CreatureDamageModifier" ADD CONSTRAINT "CreatureDamageModifier_creatureId_fkey" FOREIGN KEY ("creatureId") REFERENCES "Creature"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "MonsterPlacement" ADD CONSTRAINT "MonsterPlacement_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "CreaturePlacement" ADD CONSTRAINT "CreaturePlacement_creatureId_fkey" FOREIGN KEY ("creatureId") REFERENCES "Creature"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CreaturePlacement" ADD CONSTRAINT "CreaturePlacement_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "CharacterSpell" ADD CONSTRAINT "CharacterSpell_characterId_fkey" FOREIGN KEY ("characterId") REFERENCES "PlayerCharacter"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -439,8 +573,18 @@ ALTER TABLE "PlayerCharacter" ADD CONSTRAINT "PlayerCharacter_abilityScores_rang
   "charisma"     BETWEEN 1 AND 30
 );
 
+-- Creature ability scores stay within the 5e range (1–30), same as PlayerCharacter.
+ALTER TABLE "Creature" ADD CONSTRAINT "Creature_abilityScores_range_check" CHECK (
+  "strength"     BETWEEN 1 AND 30 AND
+  "dexterity"    BETWEEN 1 AND 30 AND
+  "constitution" BETWEEN 1 AND 30 AND
+  "intelligence" BETWEEN 1 AND 30 AND
+  "wisdom"       BETWEEN 1 AND 30 AND
+  "charisma"     BETWEEN 1 AND 30
+);
+
 -- An InventoryItem belongs to exactly one owner. Extend this list when
 -- shopId/chestId owner columns are added.
 ALTER TABLE "InventoryItem" ADD CONSTRAINT "InventoryItem_single_owner_check" CHECK (
-  (("characterId" IS NOT NULL)::int + ("npcId" IS NOT NULL)::int) = 1
+  (("characterId" IS NOT NULL)::int + ("creatureId" IS NOT NULL)::int) = 1
 );

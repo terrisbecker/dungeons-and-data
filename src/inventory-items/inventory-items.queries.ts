@@ -5,7 +5,7 @@ const select = {
   id: true,
   itemId: true,
   characterId: true,
-  npcId: true,
+  creatureId: true,
   quantity: true,
   equipped: true,
   attuned: true,
@@ -26,9 +26,9 @@ export function createInventoryItem(
   return prisma.inventoryItem.create({ data, select });
 }
 
-export function findInventoryItems(characterId: string) {
+export function findInventoryItems(where: Prisma.InventoryItemWhereInput) {
   return prisma.inventoryItem.findMany({
-    where: { characterId },
+    where,
     orderBy: { id: "asc" },
     select,
   });
@@ -57,6 +57,20 @@ export function countAttunedForCharacter(
   return prisma.inventoryItem.count({
     where: {
       characterId,
+      attuned: true,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+  });
+}
+
+// The same 5e attunement cap applies to a creature owner.
+export function countAttunedForCreature(
+  creatureId: string,
+  excludeId?: string,
+) {
+  return prisma.inventoryItem.count({
+    where: {
+      creatureId,
       attuned: true,
       ...(excludeId ? { id: { not: excludeId } } : {}),
     },

@@ -27,7 +27,7 @@ npm run format           # prettier --write .
 npm run prisma:generate  # regenerate Prisma Client after schema edits
 npm run prisma:migrate   # prisma migrate dev — create/apply a dev migration
 
-npx tsx prisma/seed.ts   # seed 5 fully-populated test characters (re-runnable)
+npx tsx prisma/seed.ts   # seed every table: characters, locations, creatures (re-runnable)
 
 docker compose up -d db  # start local Postgres (healthchecked, named volume)
 docker compose down      # stop it (add -v to also drop the data volume)
@@ -43,7 +43,8 @@ generated `migration.sql`, then `npx prisma migrate dev` to apply.
 ## Current state (as of 2026-07-22)
 
 Data model complete; the full layered stack for **all PlayerCharacter-related
-data** is now implemented. Working on branch `api/create-player-crud-and-routes`.
+data** and **all Creature (NPC/Monster) + Location data** is now implemented.
+Working on branch `database/mosters-and-npc`.
 
 **Implemented:**
 
@@ -52,12 +53,21 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
   topic router, then the central error middleware (registered last).
 - `src/db.ts` — exports a singleton `prisma` client wired through `PrismaPg`.
 - `prisma/schema.prisma` — full initial data model (see below).
-- `prisma/migrations/…_init` — **first migration, applied.** Creates all 21
-  tables/enums plus two hand-added CHECK constraints: ability scores 1–30
-  (`PlayerCharacter`) and exactly-one-owner (`InventoryItem`). Two later
-  migrations applied: `…_flesh_out_pc_catalogs`, then
-  `…_break_out_item_stats` (hand-authored raw SQL — extracts `WeaponStats`/
-  `ArmorStats` satellites from `Item` and backfills them; 23 tables total).
+- `prisma/migrations/…_init` — squashed baseline migration, applied. The earlier
+  incremental migrations (`…_init`, `…_flesh_out_pc_catalogs`,
+  `…_break_out_item_stats`, `…_flesh_out_creatures`) were collapsed into one
+  fresh `…_init` reflecting the schema (23 tables). The baseline still *creates*
+  three hand-added CHECK constraints (Prisma has no `@check`), but a follow-up
+  migration (`…_drop_ability_score_checks`) drops two of them, so only **one**
+  CHECK is live: the exactly-one-owner rule on `InventoryItem` (`characterId`
+  XOR `creatureId`) — a relational invariant worth guarding in the DB. The
+  ability-score 1–30 bounds on `PlayerCharacter`/`Creature` are now owned solely
+  by the service layer (a 5e *rules* limit, kept relaxable for homebrew).
+  **Prefer plain additive `prisma migrate dev` going forward — do NOT rebaseline
+  the history** (the old squash-and-re-append-CHECKs dance is what forced
+  hand-written SQL each time; additive migrations leave the existing constraint
+  untouched and stay fully Prisma-generated). The only remaining hand-SQL case
+  is adding/removing a CHECK, since Prisma can't diff them.
 - **HTTP foundation** (`src/http/`): `http-error.ts` (`HttpError` +
   `badRequest`/`notFound`/`conflict`), `prisma-errors.ts` (`mapPrismaError`:
   `P2025`→404, `P2002`→409, `P2003`→400), `error.middleware.ts` (generic
@@ -81,10 +91,36 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
   - Catalogs (referenced by the joins): `items/`, `spells/`, `feats/`,
     `features/`. `spells/`, `feats/`, and `features/` were fleshed out from
     stubs into full 5e shapes (see the Data model section for their columns).
-  - Service-layer invariants: ability scores 1–30, `inventory-items` forces the
-    character owner (npcId null) and enforces the ≤3 attunement cap.
-- **Seed + docs:** `prisma/seed.ts` creates 5 fully-populated test characters
-  (re-runnable); `docs/character-sheet.md` documents the character-sheet curl.
+  - Service-layer invariants: ability scores 1–30; `inventory-items` requires
+    exactly one owner (`characterId` XOR `creatureId`) and enforces the ≤3
+    attunement cap per owner.
+- **Creature CRUD across 6 topic folders**, mirroring the PlayerCharacter
+  conventions (flat `[topic].[layer].ts`; top-level URLs with `creatureId` in
+  the body/query):
+  - Hub: `creatures/` (+ `creatures.derived.ts`, pure derived-stats functions —
+    proficiency bonus from **CR**, not class level; no spellcasting block).
+    **Hard delete** (no `deletedAt` on Creature). Two reads mirror the character
+    hub: `GET /creatures/:id` returns the lean **core** (scalars + skills + a
+    computed `derived` block, what `PATCH` also returns), and
+    `GET /creatures/:id/sheet` is the full **stat block** that additionally
+    joins stat-block entries, damage modifiers, inventory, and placements. The
+    service normalizes `challengeRating` (Prisma `Decimal`) to a plain number.
+    See `docs/creature-stat-block.md`.
+  - Owned children (single `id` PK, `/topic/:id`, list by `?creatureId`):
+    `creature-skills/`, `stat-block-entries/`, `creature-damage-modifiers/`.
+  - Composite-key join (`/creature-placements/:creatureId/:locationId`):
+    `creature-placements/` — carries `quantity`/`notes`, so it keeps PATCH;
+    lists by `?creatureId` **or** `?locationId`.
+- **Location CRUD** (`locations/`) — standalone catalog with the self-nesting
+  hierarchy; the detail read (`GET /locations/:id`) includes `parent`/`children`
+  summaries and the creatures placed there.
+- **Seed + docs:** `prisma/seed.ts` populates **every table** (re-runnable): the
+  catalog rows, 5 fully-populated test characters, a nested `Location` hierarchy
+  (realm → region → town/dungeon → building), and 5 `Creature`s (2 NPCs, 3
+  monsters incl. a legendary+lair Ancient Red Dragon) with stat-block entries,
+  skills, damage modifiers, owned inventory, and location placements.
+  `docs/character-sheet.md` and `docs/creature-stat-block.md` document the
+  character-sheet and creature stat-block curls.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -93,8 +129,8 @@ data** is now implemented. Working on branch `api/create-player-crud-and-routes`
 
 **Not yet done:**
 
-- No layers yet for NPC / Monster / Location (and their placements) or the
-  economy/pricing layer.
+- No economy/pricing layer (shops, chests, buy/sell modifiers, currency
+  conversion) on top of the `Item.baseValueCp` catalog reference value.
 - No auth, no pagination.
 - No tests, no CI.
 
@@ -175,13 +211,32 @@ Models currently defined:
   widening `Item`.
 - **InventoryItem** — one `Item` **assigned** to one owner with per-instance
   state (`quantity`/`equipped`/`attuned`). Owner is polymorphic via nullable FKs
-  (`characterId`/`npcId`, extend with shop/chest later); **exactly one must be
-  set** — enforce in the service layer (+ a CHECK constraint in the migration).
+  (`characterId`/`creatureId`, extend with shop/chest later); **exactly one must
+  be set** — enforce in the service layer (+ a CHECK constraint in the migration).
   Many rows can share an `itemId`, so a single "Shortsword" catalog row serves
-  any number of characters/NPCs.
-- **NPC**, **Monster** — reusable profiles placed into locations.
-- **NpcPlacement**, **MonsterPlacement** — explicit M2M join models between
-  NPC/Monster and Location, carrying per-placement data (notes, quantity).
+  any number of characters/creatures.
+- **Creature** — the reusable **NPC/Monster** profile. NPCs and monsters share
+  an identical 5e stat block, so they are **one table discriminated by `kind`**
+  (`CreatureKind` NPC | MONSTER); NPC-only (`occupation`/`faction`/`race`) and
+  Monster-only (`challengeRating`/`experiencePoints`/`environment`/`source`/
+  legendary+lair) fields sit alongside as nullable columns. Mirrors
+  `PlayerCharacter` conventions: `@db.SmallInt` ability scores (1–30 enforced in
+  the service layer), six save-proficiency booleans; plus header
+  (`size`/`creatureType` enum +
+  free-text `typeTags`/`alignmentNote`), defense (`armorClass`/`hitPoints`/
+  `hitDice`), all movement modes + `hover`, senses (darkvision/blindsight/
+  tremorsense/truesight + `blindBeyond`), free-text `languages`/
+  `conditionImmunities`. Derived-not-stored discipline as usual (proficiency
+  bonus from CR, save/skill bonuses, passive Perception). Child tables:
+  **StatBlockEntry** (one polymorphic table keyed by `StatBlockEntryCategory` —
+  traits/actions/legendary/lair/… as free-text MM prose, text-only for now; add
+  structured attack columns later like `Spell`'s combat hooks),
+  **CreatureSkill** (mirrors `CharacterSkill`), **CreatureDamageModifier**
+  (vuln/resist/immunity + optional `damageType`/qualifier `note`). Spellcasting
+  is just a `TRAIT` entry for now (no creature↔`Spell` join yet).
+- **CreaturePlacement** — the single explicit M2M join model between `Creature`
+  and `Location` (replaced the separate `NpcPlacement`/`MonsterPlacement`),
+  carrying per-placement `quantity`/`notes`.
 - **Spell** / **CharacterSpell** — the `Spell` catalog carries full 5e spell
   data: `level`/`school`, casting details (`castingTime`/`range`/`duration`/
   `higherLevel`), V/S/M components (`verbal`/`somatic`/`material`/

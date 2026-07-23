@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { badRequest } from "../http/http-error.js";
 import { requireUuid } from "../http/validate.js";
 import {
   createInventoryItemService,
@@ -13,8 +14,18 @@ export async function postInventoryItem(req: Request, res: Response) {
 }
 
 export async function getInventoryItems(req: Request, res: Response) {
-  const characterId = requireUuid(req.query.characterId);
-  res.json(await listInventoryItemsService(characterId));
+  const { characterId, creatureId } = req.query;
+  if (characterId === undefined && creatureId === undefined) {
+    throw badRequest();
+  }
+  res.json(
+    await listInventoryItemsService({
+      characterId:
+        characterId === undefined ? undefined : requireUuid(characterId),
+      creatureId:
+        creatureId === undefined ? undefined : requireUuid(creatureId),
+    }),
+  );
 }
 
 export async function getInventoryItem(req: Request, res: Response) {
