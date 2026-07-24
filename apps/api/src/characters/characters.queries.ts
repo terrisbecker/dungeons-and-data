@@ -167,9 +167,9 @@ export function createCharacter(
   });
 }
 
-export function findCharacters() {
+export function findCharacters(playerId?: string) {
   return prisma.playerCharacter.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, ...(playerId ? { playerId } : {}) },
     orderBy: { createdAt: "desc" },
     select: characterListSelect,
   });

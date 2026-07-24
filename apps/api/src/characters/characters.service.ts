@@ -132,8 +132,8 @@ export async function createCharacterService(rawBody: unknown) {
   }
 }
 
-export function listCharactersService() {
-  return findCharacters();
+export function listCharactersService(playerId?: string) {
+  return findCharacters(playerId);
 }
 
 // Core read: character + classes/skills + the computed derived block.

@@ -18,10 +18,14 @@ export async function postCharacter(
 }
 
 export async function getCharacters(
-  _req: Request,
+  req: Request,
   res: Response,
 ): Promise<void> {
-  res.json(await listCharactersService());
+  const playerId =
+    typeof req.query.playerId === "string"
+      ? requireUuid(req.query.playerId)
+      : undefined;
+  res.json(await listCharactersService(playerId));
 }
 
 export async function getCharacter(req: Request, res: Response): Promise<void> {

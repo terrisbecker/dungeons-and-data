@@ -1,5 +1,11 @@
+# Root .dockerignore — used because the API image builds from the repo-root
+# context (docker build -f apps/api/Dockerfile .).
 node_modules
+**/node_modules
 dist
+**/dist
+.next
+**/.next
 .git
 .gitignore
 .env
@@ -7,6 +13,5 @@ dist
 !.env.example
 *.log
 .DS_Store
-Dockerfile
-docker-compose.yml
-.dockerignore
+apps/web
+docs
