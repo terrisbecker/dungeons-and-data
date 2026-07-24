@@ -1,4 +1,4 @@
-import type { ApiError, AuthResponse, MeResponse } from "@dnd/shared";
+import type { ApiError, AuthResponse, Campaign, MeResponse } from "@dnd/shared";
 import { getToken } from "./session";
 
 // Server-only client for the Express API. Every browser call goes through Next
@@ -50,6 +50,14 @@ export async function serverFetch<T>(
 // The current player + memberships (GET /auth/me).
 export function getMe(): Promise<MeResponse> {
   return serverFetch<MeResponse>("/auth/me");
+}
+
+// Create a campaign (POST /campaigns). The API auto-seats the creator as its DM.
+export function createCampaign(body: unknown): Promise<Campaign> {
+  return serverFetch<Campaign>("/campaigns", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.

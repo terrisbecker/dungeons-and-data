@@ -3,11 +3,13 @@ import type { MeResponse } from "@dnd/shared";
 import { ApiRequestError, getMe } from "@/lib/api";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CreateCampaignDialog } from "./create-campaign-dialog";
 import { LogoutButton } from "./logout-button";
 
 export default async function DashboardPage() {
@@ -58,6 +60,9 @@ export default async function DashboardPage() {
                 ? "You are not in any campaigns yet."
                 : `${me.memberships.length} membership(s), ${dmOf.length} as Dungeon Master.`}
             </CardDescription>
+            <CardAction>
+              <CreateCampaignDialog />
+            </CardAction>
           </CardHeader>
           {me.memberships.length > 0 && (
             <CardContent className="flex flex-col gap-2">

@@ -37,6 +37,23 @@ export interface MeResponse extends PlayerPublic {
   memberships: Membership[];
 }
 
+// A campaign with its roster — the detail shape returned by POST /campaigns and
+// GET /campaigns/:id (mirrors campaignDetailSelect in campaigns.queries.ts).
+export interface Campaign {
+  id: string;
+  name: string;
+  description: string | null;
+  status: CampaignStatus;
+  createdAt: string;
+  updatedAt: string;
+  memberships: Array<{
+    id: string;
+    role: CampaignRole;
+    joinedAt: string;
+    player: { id: string; username: string; displayName: string | null };
+  }>;
+}
+
 // The API's generic error body: { "error": "…" }.
 export interface ApiError {
   error: string;
