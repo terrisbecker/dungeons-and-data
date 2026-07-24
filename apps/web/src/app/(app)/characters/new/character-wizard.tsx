@@ -21,15 +21,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { EnumSelect, Field } from "@/components/form-fields";
 import { cn } from "@/lib/utils";
 
 // --- Reference data --------------------------------------------------------
@@ -454,58 +448,6 @@ function Stepper({
         </li>
       ))}
     </ol>
-  );
-}
-
-// --- Small field helpers ---------------------------------------------------
-
-function Field({
-  id,
-  label,
-  children,
-}: {
-  id: string;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function EnumSelect({
-  id,
-  value,
-  onValueChange,
-  items,
-  placeholder,
-}: {
-  id?: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  items: Record<string, string>;
-  placeholder?: string;
-}) {
-  return (
-    <Select
-      value={value}
-      onValueChange={(v) => onValueChange(v as string)}
-      items={items}
-    >
-      <SelectTrigger id={id} className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {Object.entries(items).map(([val, label]) => (
-          <SelectItem key={val} value={val}>
-            {label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 

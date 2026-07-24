@@ -1,7 +1,9 @@
 import { ApiRequestError, serverFetch } from "@/lib/api";
 
-// BFF proxy for deleting a character's owned-child rows. All six topics use a
-// single-id DELETE (`/{topic}/{id}`); the API guard verifies ownership.
+// BFF proxy for deleting a character's single-id child rows (`/{topic}/{id}`):
+// the six owned children plus inventory items. The composite-key catalog joins
+// (character-spells/feats/features) delete via the sibling [id]/[otherId] route.
+// The API guard verifies ownership.
 const ALLOWED_TOPICS = new Set([
   "character-classes",
   "character-skills",
@@ -9,6 +11,7 @@ const ALLOWED_TOPICS = new Set([
   "character-resources",
   "proficiencies",
   "character-conditions",
+  "inventory-items",
 ]);
 
 export async function DELETE(

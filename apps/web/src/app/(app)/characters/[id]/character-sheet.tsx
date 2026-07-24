@@ -19,6 +19,12 @@ import {
   SkillsSection,
   SpellSlotsSection,
 } from "./character-sheet-sections";
+import {
+  FeatsSection,
+  FeaturesSection,
+  InventorySection,
+  SpellsSection,
+} from "./character-sheet-catalog-sections";
 
 // --- Presentational reference data -----------------------------------------
 
@@ -293,16 +299,6 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
                   </Badge>
                 </div>
               ))}
-              {sheet.spells.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {sheet.spells.map((s) => (
-                    <Badge key={s.spell.id} variant="outline">
-                      {s.spell.name}
-                      {s.prepared && " ●"}
-                    </Badge>
-                  ))}
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
@@ -313,6 +309,9 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
           spellSlots={sheet.spellSlots}
         />
 
+        {/* Spells (catalog) */}
+        <SpellsSection characterId={sheet.id} spells={sheet.spells} />
+
         {/* Resources */}
         <ResourcesSection characterId={sheet.id} resources={sheet.resources} />
 
@@ -322,40 +321,11 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
           conditions={sheet.conditions}
         />
 
-        {/* Features */}
-        {sheet.features.length > 0 && (
-          <ListCard title="Features">
-            <ul className="flex flex-col gap-1 text-sm">
-              {sheet.features.map((f) => (
-                <li key={f.feature.id} className="flex justify-between gap-2">
-                  <span>{f.feature.name}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {f.feature.source}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </ListCard>
-        )}
+        {/* Features (catalog) */}
+        <FeaturesSection characterId={sheet.id} features={sheet.features} />
 
-        {/* Feats */}
-        {sheet.feats.length > 0 && (
-          <ListCard title="Feats">
-            <ul className="flex flex-col gap-1 text-sm">
-              {sheet.feats.map((f) => (
-                <li key={f.feat.id}>
-                  <span className="font-medium">{f.feat.name}</span>
-                  {f.feat.description && (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      — {f.feat.description}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </ListCard>
-        )}
+        {/* Feats (catalog) */}
+        <FeatsSection characterId={sheet.id} feats={sheet.feats} />
 
         {/* Proficiencies */}
         <ProficienciesSection
@@ -363,30 +333,8 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
           proficiencies={sheet.proficiencies}
         />
 
-        {/* Inventory */}
-        {sheet.inventory.length > 0 && (
-          <ListCard title="Inventory">
-            <ul className="flex flex-col gap-1 text-sm">
-              {sheet.inventory.map((row) => (
-                <li key={row.id} className="flex justify-between gap-2">
-                  <span>
-                    {row.item.name}
-                    {row.quantity > 1 && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        ×{row.quantity}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground flex gap-1.5 text-xs">
-                    {row.equipped && <span>equipped</span>}
-                    {row.attuned && <span>attuned</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </ListCard>
-        )}
+        {/* Inventory (catalog) */}
+        <InventorySection characterId={sheet.id} inventory={sheet.inventory} />
 
         {/* Currency */}
         <Card>
@@ -428,23 +376,6 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
         )}
       </div>
     </main>
-  );
-}
-
-function ListCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
   );
 }
 

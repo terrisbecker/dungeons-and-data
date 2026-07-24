@@ -62,17 +62,18 @@ Backend-only workspace scripts (`build`/`start`/`lint:fix`) run with
 `@check`): from `apps/api/`, `npx prisma migrate dev --name <name> --create-only`,
 hand-edit the generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
-## Current state (as of 2026-07-23)
+## Current state (as of 2026-07-24)
 
 Data model complete; the full backend layered stack for **all
 PlayerCharacter-related data** and **all Creature (NPC/Monster) + Location data**
 is implemented, plus a **JWT auth + role-based authorization** layer and the
 `Player`/`Campaign`/`CampaignMembership` CRUD that backs it. The repo is now a
-**full-stack npm-workspaces monorepo**: the backend moved under `apps/api/`, a
-Next.js frontend (`apps/web/`) delivers the **auth slice** (register/login/
-logout + a dashboard reading `/auth/me`) via a BFF with an httpOnly-cookie
-session, and `packages/shared` holds the type-only API contract. Working on
-branch `feat/auth`.
+**full-stack npm-workspaces monorepo**: the backend lives under `apps/api/`, a
+Next.js frontend (`apps/web/`) now covers the **auth slice, a dashboard, and
+campaign + character management** (character creation and an interactive
+character sheet), and `packages/shared` holds the type-only API contract.
+Everything reaches the API through a BFF with an httpOnly-cookie session.
+Working on branch `frontend/character-creation-wizard`.
 
 **Implemented:**
 
@@ -196,6 +197,36 @@ branch `feat/auth`.
   NPCs (the three monsters stay shared/null-campaign) so every authorization path
   is exercisable. `docs/character-sheet.md` and `docs/creature-stat-block.md`
   document the character-sheet and creature stat-block curls.
+- **Frontend (`apps/web`)** — a Next.js App-Router UI over the API via the BFF
+  (full details in `docs/frontend.md`). The browser only ever calls Next; each
+  Server Component / Route Handler attaches the JWT from the httpOnly `session`
+  cookie (`src/lib/api.ts` `serverFetch` + typed helpers), so the token never
+  reaches the browser, and `src/proxy.ts` gates authed routes on the cookie.
+  - **Auth** (`(auth)/`): register / login forms POST to Next Route Handlers
+    (`api/auth/{login,register,logout}`) that set/clear the cookie.
+  - **Dashboard** (`(app)/dashboard`): reads `/auth/me` + the player's
+    characters; lists campaign memberships and characters, with a
+    **create-campaign** dialog and a **New character** link.
+  - **Campaign workspace** (`(app)/campaigns/[id]`): a sidebar-shell scaffold
+    (the nav items are still placeholders).
+  - **Character creation** (`(app)/characters/new`): a wizard that captures
+    **only the main `PlayerCharacter` row** — Identity → Abilities → Combat →
+    Roleplay → Review. It deliberately does **not** collect satellite-table data;
+    those are added afterward from the sheet.
+  - **Character sheet** (`(app)/characters/[id]`): renders
+    `GET /characters/:id/sheet`, and its owned-child sections are **interactive**
+    — each of classes, skills, spell slots, resources, proficiencies, and
+    conditions has an inline, in-card **Add** form (expand/collapse, no modal)
+    and per-row **remove**, mutating via the BFF and calling `router.refresh()`
+    (server component re-fetch, single source of truth). Catalog-backed data
+    (inventory items, spells, feats, features) is still **read-only** — a
+    follow-up will add pick-from-catalog forms.
+  - **BFF Route Handlers** (`src/app/api/*`): `campaigns` (POST); `characters`
+    (POST — orchestrates the parent create + owned children with a best-effort
+    rollback, injecting `playerId` server-side); and `character-children/[topic]`
+    (POST + `[id]` DELETE — an **allowlisted** proxy to the six owned-child API
+    endpoints that the sheet sections use; the API's own guards enforce
+    ownership).
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -210,6 +241,11 @@ branch `feat/auth`.
 - No pagination. Auth is JWT-only (no refresh tokens, no revocation/blocklist —
   a token stays valid until it expires even if the account is later demoted).
 - No tests, no CI.
+- **Frontend gaps:** no editing/deleting of the main character row or the
+  campaign roster from the UI; the sheet's catalog-backed sections (inventory
+  items, spells, feats, features) are read-only (pick-from-catalog dialogs are a
+  follow-up); the campaign-workspace sidebar nav is a non-functional placeholder;
+  and Creature/Location data has no frontend yet.
 
 ## Architecture — layered backend
 

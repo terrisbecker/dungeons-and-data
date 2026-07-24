@@ -4,7 +4,11 @@ import type {
   Campaign,
   CharacterSheet,
   CharacterSummary,
+  FeatCatalog,
+  FeatureCatalog,
+  ItemCatalog,
   MeResponse,
+  SpellCatalog,
 } from "@dnd/shared";
 import { getToken } from "./session";
 
@@ -116,6 +120,25 @@ export function deleteCharacter(id: string): Promise<void> {
   return serverFetch<void>(`/characters/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// Shared catalogs (GET /items, /spells, /feats, /features). Readable by any
+// authed user; the catalog pages use these server-side, while the sheet pickers
+// fetch /api/catalog/[topic] from the client.
+export function listItems(): Promise<ItemCatalog[]> {
+  return serverFetch<ItemCatalog[]>("/items");
+}
+
+export function listSpells(): Promise<SpellCatalog[]> {
+  return serverFetch<SpellCatalog[]>("/spells");
+}
+
+export function listFeats(): Promise<FeatCatalog[]> {
+  return serverFetch<FeatCatalog[]>("/feats");
+}
+
+export function listFeatures(): Promise<FeatureCatalog[]> {
+  return serverFetch<FeatureCatalog[]>("/features");
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.

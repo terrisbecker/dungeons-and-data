@@ -111,6 +111,55 @@ export type SpellSchool =
   | "TRANSMUTATION";
 export type FeatureSource =
   "RACE" | "CLASS" | "SUBCLASS" | "BACKGROUND" | "FEAT";
+export type DamageType =
+  | "ACID"
+  | "BLUDGEONING"
+  | "COLD"
+  | "FIRE"
+  | "FORCE"
+  | "LIGHTNING"
+  | "NECROTIC"
+  | "PIERCING"
+  | "POISON"
+  | "PSYCHIC"
+  | "RADIANT"
+  | "SLASHING"
+  | "THUNDER";
+export type ItemType =
+  | "ADVENTURING_GEAR"
+  | "WEAPON"
+  | "ARMOR"
+  | "AMMUNITION"
+  | "POTION"
+  | "SCROLL"
+  | "WAND"
+  | "ROD"
+  | "STAFF"
+  | "RING"
+  | "WONDROUS_ITEM"
+  | "TOOL"
+  | "FOOD_AND_DRINK"
+  | "TRADE_GOOD"
+  | "CONTAINER"
+  | "MOUNT_OR_VEHICLE"
+  | "TREASURE"
+  | "OTHER";
+export type ItemRarity =
+  "COMMON" | "UNCOMMON" | "RARE" | "VERY_RARE" | "LEGENDARY" | "ARTIFACT";
+export type WeaponCategory = "SIMPLE" | "MARTIAL";
+export type WeaponProperty =
+  | "AMMUNITION"
+  | "FINESSE"
+  | "HEAVY"
+  | "LIGHT"
+  | "LOADING"
+  | "RANGE"
+  | "REACH"
+  | "SPECIAL"
+  | "THROWN"
+  | "TWO_HANDED"
+  | "VERSATILE";
+export type ArmorCategory = "LIGHT" | "MEDIUM" | "HEAVY" | "SHIELD";
 
 // A class a character has levels in (POST /character-classes). `characterId` is
 // added by the creation flow, so the wizard omits it here.
@@ -154,6 +203,183 @@ export interface ProficiencyInput {
 export interface CharacterConditionInput {
   name: string;
   level?: number | null;
+  notes?: string | null;
+}
+
+// --- Catalogs (Item / Spell / Feat / Feature) ------------------------------
+// DMs and Admins author these shared, reusable rows; players attach existing
+// ones to characters via the join tables below.
+
+// GET /items — the flat item shape (the service folds the 1:1 weapon/armor
+// satellites back into this single object; both groups are null on other types).
+export interface ItemCatalog {
+  id: string;
+  name: string;
+  description: string | null;
+  type: ItemType;
+  rarity: ItemRarity;
+  isMagic: boolean;
+  tags: string[];
+  requiresAttunement: boolean;
+  weight: number | null;
+  stackable: boolean;
+  consumable: boolean;
+  baseValueCp: number | null;
+  // Weapon satellite (present only when type === "WEAPON").
+  weaponCategory?: WeaponCategory | null;
+  damageDice?: string | null;
+  damageType?: DamageType | null;
+  versatileDamage?: string | null;
+  weaponProperties?: WeaponProperty[] | null;
+  rangeNormal?: number | null;
+  rangeLong?: number | null;
+  // Armor satellite (present only when type === "ARMOR").
+  armorCategory?: ArmorCategory | null;
+  baseArmorClass?: number | null;
+  addDexToArmorClass?: boolean | null;
+  maxDexBonus?: number | null;
+  strengthRequirement?: number | null;
+  stealthDisadvantage?: boolean | null;
+}
+
+// GET /spells.
+export interface SpellCatalog {
+  id: string;
+  name: string;
+  level: number;
+  school: SpellSchool | null;
+  description: string | null;
+  castingTime: string | null;
+  range: string | null;
+  duration: string | null;
+  higherLevel: string | null;
+  verbal: boolean;
+  somatic: boolean;
+  material: boolean;
+  materialComponent: string | null;
+  concentration: boolean;
+  ritual: boolean;
+  savingThrow: Ability | null;
+  damageType: DamageType | null;
+  isAttack: boolean;
+}
+
+// GET /feats.
+export interface FeatCatalog {
+  id: string;
+  name: string;
+  description: string | null;
+  prerequisite: string | null;
+  repeatable: boolean;
+  grantsAbilityScoreIncrease: boolean;
+}
+
+// GET /features.
+export interface FeatureCatalog {
+  id: string;
+  name: string;
+  source: FeatureSource;
+  description: string | null;
+  level: number | null;
+  subtype: string | null;
+}
+
+// POST /items — `name` required; the weapon/armor groups are validated against
+// `type` by the service (WEAPON requires its three, ARMOR requires its two).
+export interface CreateItemInput {
+  name: string;
+  description?: string | null;
+  type?: ItemType;
+  rarity?: ItemRarity;
+  isMagic?: boolean;
+  tags?: string[];
+  requiresAttunement?: boolean;
+  weight?: number | null;
+  stackable?: boolean;
+  consumable?: boolean;
+  baseValueCp?: number | null;
+  weaponCategory?: WeaponCategory;
+  damageDice?: string;
+  damageType?: DamageType;
+  versatileDamage?: string;
+  weaponProperties?: WeaponProperty[];
+  rangeNormal?: number;
+  rangeLong?: number;
+  armorCategory?: ArmorCategory;
+  baseArmorClass?: number;
+  addDexToArmorClass?: boolean;
+  maxDexBonus?: number;
+  strengthRequirement?: number;
+  stealthDisadvantage?: boolean;
+}
+
+// POST /spells.
+export interface CreateSpellInput {
+  name: string;
+  level: number; // 0–9
+  school?: SpellSchool;
+  description?: string;
+  castingTime?: string;
+  range?: string;
+  duration?: string;
+  higherLevel?: string;
+  verbal?: boolean;
+  somatic?: boolean;
+  material?: boolean;
+  materialComponent?: string;
+  concentration?: boolean;
+  ritual?: boolean;
+  savingThrow?: Ability;
+  damageType?: DamageType;
+  isAttack?: boolean;
+}
+
+// POST /feats.
+export interface CreateFeatInput {
+  name: string;
+  description?: string;
+  prerequisite?: string;
+  repeatable?: boolean;
+  grantsAbilityScoreIncrease?: boolean;
+}
+
+// POST /features.
+export interface CreateFeatureInput {
+  name: string;
+  source: FeatureSource;
+  description?: string;
+  level?: number; // 1–20
+  subtype?: string;
+}
+
+// --- Attach-a-catalog-row-to-a-character joins -----------------------------
+// characterId is injected by the sheet section, like the owned-child inputs.
+
+// POST /inventory-items.
+export interface InventoryItemInput {
+  itemId: string;
+  quantity?: number;
+  equipped?: boolean;
+  attuned?: boolean;
+}
+
+// POST /character-spells.
+export interface CharacterSpellJoinInput {
+  spellId: string;
+  known?: boolean;
+  prepared?: boolean;
+  alwaysPrepared?: boolean;
+  sourceClass?: string | null;
+}
+
+// POST /character-feats (pure join).
+export interface CharacterFeatJoinInput {
+  featId: string;
+}
+
+// POST /character-features.
+export interface CharacterFeatureJoinInput {
+  featureId: string;
   notes?: string | null;
 }
 

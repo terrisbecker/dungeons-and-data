@@ -1,10 +1,12 @@
 import { ApiRequestError, serverFetch } from "@/lib/api";
 
-// BFF proxy for creating a character's owned-child rows (classes, skills, spell
-// slots, resources, proficiencies, conditions) from the character sheet. The
-// client posts the same body the API expects (including `characterId`); the
-// API's own guard verifies the caller may write that character, so we only need
-// to allowlist the topic segment to avoid proxying to arbitrary paths.
+// BFF proxy for creating a character's child rows from the character sheet:
+// owned children (classes, skills, spell slots, resources, proficiencies,
+// conditions) and catalog joins (inventory items, spells, feats, features). The
+// client posts the same body the API expects (including `characterId` + the
+// catalog row id); the API's own guard verifies the caller may write that
+// character, so we only need to allowlist the topic segment to avoid proxying to
+// arbitrary paths.
 const ALLOWED_TOPICS = new Set([
   "character-classes",
   "character-skills",
@@ -12,6 +14,10 @@ const ALLOWED_TOPICS = new Set([
   "character-resources",
   "proficiencies",
   "character-conditions",
+  "inventory-items",
+  "character-spells",
+  "character-feats",
+  "character-features",
 ]);
 
 export async function POST(

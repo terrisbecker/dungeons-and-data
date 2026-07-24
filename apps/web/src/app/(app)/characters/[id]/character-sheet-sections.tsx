@@ -20,25 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { EnumSelect } from "@/components/form-fields";
 
 // --- Reference data --------------------------------------------------------
 
@@ -93,7 +78,10 @@ const REST_TYPES: Record<RestType, string> = {
 
 // --- Mutation helpers ------------------------------------------------------
 
-async function postChild(topic: string, body: unknown): Promise<boolean> {
+export async function postChild(
+  topic: string,
+  body: unknown,
+): Promise<boolean> {
   try {
     const res = await fetch(`/api/character-children/${topic}`, {
       method: "POST",
@@ -112,7 +100,7 @@ async function postChild(topic: string, body: unknown): Promise<boolean> {
   }
 }
 
-async function deleteChild(topic: string, id: string): Promise<boolean> {
+export async function deleteChild(topic: string, id: string): Promise<boolean> {
   try {
     const res = await fetch(`/api/character-children/${topic}/${id}`, {
       method: "DELETE",
@@ -131,11 +119,11 @@ async function deleteChild(topic: string, id: string): Promise<boolean> {
 
 // --- Shared layout primitives ----------------------------------------------
 
-function SectionCard({
+export function SectionCard({
   title,
   description,
   addLabel,
-  dialogTitle,
+  formTitle,
   onOpenChange,
   open,
   form,
@@ -144,7 +132,7 @@ function SectionCard({
   title: string;
   description?: string;
   addLabel: string;
-  dialogTitle: string;
+  formTitle: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   form: React.ReactNode;
@@ -158,26 +146,31 @@ function SectionCard({
             <CardTitle>{title}</CardTitle>
             {description && <CardDescription>{description}</CardDescription>}
           </div>
-          <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogTrigger render={<Button size="sm" variant="outline" />}>
-              <PlusIcon />
-              {addLabel}
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{dialogTitle}</DialogTitle>
-              </DialogHeader>
-              {form}
-            </DialogContent>
-          </Dialog>
+          <Button
+            size="sm"
+            variant="outline"
+            aria-expanded={open}
+            onClick={() => onOpenChange(!open)}
+          >
+            {open ? <XIcon /> : <PlusIcon />}
+            {open ? "Close" : addLabel}
+          </Button>
         </div>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="flex flex-col gap-4">
+        {open && (
+          <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
+            <p className="text-sm font-medium">{formTitle}</p>
+            {form}
+          </div>
+        )}
+        {children}
+      </CardContent>
     </Card>
   );
 }
 
-function RemoveButton({ onRemove }: { onRemove: () => void }) {
+export function RemoveButton({ onRemove }: { onRemove: () => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <Button
@@ -196,53 +189,26 @@ function RemoveButton({ onRemove }: { onRemove: () => void }) {
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+export function EmptyState({ text }: { text: string }) {
   return <p className="text-muted-foreground text-sm">{text}</p>;
 }
 
-function EnumSelect({
-  id,
-  value,
-  onValueChange,
-  items,
-  placeholder,
+export function FormButtons({
+  submitting,
+  onCancel,
 }: {
-  id?: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  items: Record<string, string>;
-  placeholder?: string;
+  submitting: boolean;
+  onCancel: () => void;
 }) {
   return (
-    <Select
-      value={value}
-      onValueChange={(v) => onValueChange(v as string)}
-      items={items}
-    >
-      <SelectTrigger id={id} className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {Object.entries(items).map(([val, label]) => (
-          <SelectItem key={val} value={val}>
-            {label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function DialogButtons({ submitting }: { submitting: boolean }) {
-  return (
-    <DialogFooter>
-      <DialogClose render={<Button type="button" variant="outline" />}>
+    <div className="flex justify-end gap-2">
+      <Button type="button" variant="outline" onClick={onCancel}>
         Cancel
-      </DialogClose>
+      </Button>
       <Button type="submit" disabled={submitting}>
         {submitting ? "Adding…" : "Add"}
       </Button>
-    </DialogFooter>
+    </div>
   );
 }
 
@@ -315,7 +281,7 @@ export function ClassesSection({
       title="Classes"
       description="Multiclassing is supported — add a row per class."
       addLabel="Add class"
-      dialogTitle="Add class"
+      formTitle="Add class"
       open={open}
       onOpenChange={setOpen}
       form={
@@ -369,7 +335,10 @@ export function ClassesSection({
               />
             </div>
           </div>
-          <DialogButtons submitting={submitting} />
+          <FormButtons
+            submitting={submitting}
+            onCancel={() => setOpen(false)}
+          />
         </form>
       }
     >
@@ -465,7 +434,7 @@ export function SkillsSection({
       title="Skills"
       description="All 18 skills show their computed modifier; add or remove proficiencies here."
       addLabel="Add proficiency"
-      dialogTitle="Add skill proficiency"
+      formTitle="Add skill proficiency"
       open={open}
       onOpenChange={setOpen}
       form={
@@ -496,17 +465,21 @@ export function SkillsSection({
               </div>
             </div>
           )}
-          <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" />}>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
-            </DialogClose>
+            </Button>
             <Button
               type="submit"
               disabled={submitting || available.length === 0}
             >
               {submitting ? "Adding…" : "Add"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       }
     >
@@ -619,7 +592,7 @@ export function SpellSlotsSection({
       title="Spell Slots"
       description="Per-level slot tracks; mark Warlock pact magic separately."
       addLabel="Add slots"
-      dialogTitle="Add spell slot track"
+      formTitle="Add spell slot track"
       open={open}
       onOpenChange={setOpen}
       form={
@@ -667,7 +640,10 @@ export function SpellSlotsSection({
             />
             Warlock pact magic slot
           </label>
-          <DialogButtons submitting={submitting} />
+          <FormButtons
+            submitting={submitting}
+            onCancel={() => setOpen(false)}
+          />
         </form>
       }
     >
@@ -764,7 +740,7 @@ export function ResourcesSection({
       title="Resources"
       description="Limited-use pools like Rage, Ki, or Channel Divinity."
       addLabel="Add resource"
-      dialogTitle="Add resource"
+      formTitle="Add resource"
       open={open}
       onOpenChange={setOpen}
       form={
@@ -810,7 +786,10 @@ export function ResourcesSection({
               />
             </div>
           </div>
-          <DialogButtons submitting={submitting} />
+          <FormButtons
+            submitting={submitting}
+            onCancel={() => setOpen(false)}
+          />
         </form>
       }
     >
@@ -894,7 +873,7 @@ export function ProficienciesSection({
       title="Proficiencies"
       description="Weapon, armor, tool, language, and other proficiencies."
       addLabel="Add proficiency"
-      dialogTitle="Add proficiency"
+      formTitle="Add proficiency"
       open={open}
       onOpenChange={setOpen}
       form={
@@ -920,7 +899,10 @@ export function ProficienciesSection({
               />
             </div>
           </div>
-          <DialogButtons submitting={submitting} />
+          <FormButtons
+            submitting={submitting}
+            onCancel={() => setOpen(false)}
+          />
         </form>
       }
     >
@@ -1015,7 +997,7 @@ export function ConditionsSection({
       title="Conditions"
       description="Active status effects such as poisoned, prone, or exhaustion."
       addLabel="Add condition"
-      dialogTitle="Add condition"
+      formTitle="Add condition"
       open={open}
       onOpenChange={setOpen}
       form={
@@ -1052,7 +1034,10 @@ export function ConditionsSection({
               rows={2}
             />
           </div>
-          <DialogButtons submitting={submitting} />
+          <FormButtons
+            submitting={submitting}
+            onCancel={() => setOpen(false)}
+          />
         </form>
       }
     >

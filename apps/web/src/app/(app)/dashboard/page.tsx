@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PlusIcon } from "lucide-react";
+import { ChevronRightIcon, PlusIcon } from "lucide-react";
 import type { CharacterSummary, MeResponse } from "@dnd/shared";
 import { ApiRequestError, getMe, getMyCharacters } from "@/lib/api";
+import { getSessionClaims } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,11 +17,19 @@ import { CreateCampaignDialog } from "./create-campaign-dialog";
 import { LogoutButton } from "./logout-button";
 
 export default async function DashboardPage() {
+  // playerId comes from the session cookie's JWT, so the character list can load
+  // in parallel with /auth/me instead of waiting on it (memberships/displayName
+  // still need /auth/me). Promise.all fires both on one round-trip.
+  const claims = await getSessionClaims();
+  if (!claims) redirect("/api/auth/logout");
+
   let me: MeResponse;
   let characters: CharacterSummary[];
   try {
-    me = await getMe();
-    characters = await getMyCharacters(me.id);
+    [me, characters] = await Promise.all([
+      getMe(),
+      getMyCharacters(claims.playerId),
+    ]);
   } catch (error) {
     // Token missing/expired at the API — clear it and bounce to login (a plain
     // redirect would loop against the proxy, which still sees the cookie).
@@ -31,6 +40,15 @@ export default async function DashboardPage() {
   }
 
   const dmOf = me.memberships.filter((m) => m.role === "DUNGEON_MASTER");
+  // Only Admins and DMs may author the shared catalogs (the API's guardCatalog
+  // enforces this; we hide the entry point for everyone else).
+  const canManageCatalogs = me.systemRole === "ADMIN" || dmOf.length > 0;
+  const CATALOGS = [
+    { href: "/catalog/items", label: "Items" },
+    { href: "/catalog/spells", label: "Spells" },
+    { href: "/catalog/feats", label: "Feats" },
+    { href: "/catalog/features", label: "Features" },
+  ];
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 p-6">
@@ -131,6 +149,30 @@ export default async function DashboardPage() {
             </CardContent>
           )}
         </Card>
+
+        {canManageCatalogs && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Catalogs</CardTitle>
+              <CardDescription>
+                Shared items, spells, feats, and features players can add to
+                their characters.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {CATALOGS.map((c) => (
+                <Link
+                  key={c.href}
+                  href={c.href}
+                  className="hover:bg-muted/50 flex items-center justify-between rounded-md border p-3 transition-colors"
+                >
+                  <span className="font-medium">{c.label}</span>
+                  <ChevronRightIcon className="text-muted-foreground size-4" />
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </main>
   );
