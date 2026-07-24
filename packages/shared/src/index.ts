@@ -54,6 +54,23 @@ export interface Campaign {
   }>;
 }
 
+// A lean PlayerCharacter as returned by GET /characters (mirrors
+// characterListSelect in characters.queries.ts). alignment/size are enums on the
+// API, typed loosely here since the dashboard list only renders race/HP/AC.
+export interface CharacterSummary {
+  id: string;
+  characterName: string;
+  race: string;
+  subrace: string | null;
+  alignment: string | null;
+  size: string | null;
+  maxHitPoints: number;
+  currentHitPoints: number;
+  armorClass: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // The API's generic error body: { "error": "…" }.
 export interface ApiError {
   error: string;

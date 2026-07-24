@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { MeResponse } from "@dnd/shared";
-import { ApiRequestError, getMe } from "@/lib/api";
+import { PlusIcon } from "lucide-react";
+import type { CharacterSummary, MeResponse } from "@dnd/shared";
+import { ApiRequestError, getMe, getMyCharacters } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -14,8 +17,10 @@ import { LogoutButton } from "./logout-button";
 
 export default async function DashboardPage() {
   let me: MeResponse;
+  let characters: CharacterSummary[];
   try {
     me = await getMe();
+    characters = await getMyCharacters(me.id);
   } catch (error) {
     // Token missing/expired at the API — clear it and bounce to login (a plain
     // redirect would loop against the proxy, which still sees the cookie).
@@ -67,9 +72,10 @@ export default async function DashboardPage() {
           {me.memberships.length > 0 && (
             <CardContent className="flex flex-col gap-2">
               {me.memberships.map((m) => (
-                <div
+                <Link
                   key={m.id}
-                  className="flex items-center justify-between rounded-md border p-3"
+                  href={`/campaigns/${m.campaign.id}`}
+                  className="hover:bg-muted/50 flex items-center justify-between rounded-md border p-3 transition-colors"
                 >
                   <div>
                     <p className="font-medium">{m.campaign.name}</p>
@@ -79,6 +85,45 @@ export default async function DashboardPage() {
                   </div>
                   <span className="text-muted-foreground text-sm">
                     {m.role === "DUNGEON_MASTER" ? "Dungeon Master" : "Player"}
+                  </span>
+                </Link>
+              ))}
+            </CardContent>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Characters</CardTitle>
+            <CardDescription>
+              {characters.length === 0
+                ? "No characters yet."
+                : `${characters.length} character(s).`}
+            </CardDescription>
+            <CardAction>
+              <Button
+                size="sm"
+                nativeButton={false}
+                render={<Link href="/characters/new" />}
+              >
+                <PlusIcon />
+                New character
+              </Button>
+            </CardAction>
+          </CardHeader>
+          {characters.length > 0 && (
+            <CardContent className="flex flex-col gap-2">
+              {characters.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between rounded-md border p-3"
+                >
+                  <div>
+                    <p className="font-medium">{c.characterName}</p>
+                    <p className="text-muted-foreground text-xs">{c.race}</p>
+                  </div>
+                  <span className="text-muted-foreground text-sm">
+                    HP {c.currentHitPoints}/{c.maxHitPoints} · AC {c.armorClass}
                   </span>
                 </div>
               ))}

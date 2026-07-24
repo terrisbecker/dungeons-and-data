@@ -1,4 +1,10 @@
-import type { ApiError, AuthResponse, Campaign, MeResponse } from "@dnd/shared";
+import type {
+  ApiError,
+  AuthResponse,
+  Campaign,
+  CharacterSummary,
+  MeResponse,
+} from "@dnd/shared";
 import { getToken } from "./session";
 
 // Server-only client for the Express API. Every browser call goes through Next
@@ -58,6 +64,18 @@ export function createCampaign(body: unknown): Promise<Campaign> {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// A single campaign with its roster (GET /campaigns/:id).
+export function getCampaign(id: string): Promise<Campaign> {
+  return serverFetch<Campaign>(`/campaigns/${id}`);
+}
+
+// A player's own characters (GET /characters?playerId=…).
+export function getMyCharacters(playerId: string): Promise<CharacterSummary[]> {
+  return serverFetch<CharacterSummary[]>(
+    `/characters?playerId=${encodeURIComponent(playerId)}`,
+  );
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.
