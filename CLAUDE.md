@@ -1,51 +1,78 @@
-# Dungeons and Data — Backend
+# Dungeons and Data — Full-stack monorepo
 
 A lightweight tool to help Dungeon Masters manage D&D games by organizing game
-data in a relational database and exposing it through an Express API. On top of
-the data layer sits business logic for nested locations, character management,
-items/inventory, item economy (shops, chests, loot), encounters, and dice rolls.
-This is the **backend only**; a separate front-end concept exists elsewhere.
+data in a relational database, exposing it through an Express API, and (now) a
+Next.js web app. On top of the data layer sits business logic for nested
+locations, character management, items/inventory, item economy (shops, chests,
+loot), encounters, and dice rolls.
+
+**This is an npm-workspaces monorepo:**
+
+```
+apps/api/        Express 5 + Prisma 7 backend (was the repo root; moved here)
+apps/web/        Next.js (App Router) + Tailwind + shadcn/ui frontend
+packages/shared/ @dnd/shared — type-only API contract, consumed by both apps
+```
+
+> **Path note:** the backend sections below describe files relative to
+> `apps/api/` (e.g. `src/app.ts` = `apps/api/src/app.ts`). The frontend is
+> documented in `docs/frontend.md`.
 
 ## Tech stack
 
-- **Runtime:** Node.js (ESM — `"type": "module"`), TypeScript (strict)
-- **Web:** Express 5
-- **ORM:** Prisma 7 with the `@prisma/adapter-pg` driver adapter (`pg`)
-- **DB:** PostgreSQL
-- **Tooling:** ESLint 10 (flat config) + Prettier, `tsx` for dev/watch
-- **Docker:** planned per the original concept, not yet added
+- **Monorepo:** npm workspaces (`apps/*`, `packages/*`); root scripts fan out,
+  `concurrently` runs both apps in dev. Shared `tsconfig.base.json`; Prettier at
+  the root; ESLint per-app.
+- **Backend (`apps/api`):** Node.js (ESM), TypeScript (strict), Express 5,
+  Prisma 7 with the `@prisma/adapter-pg` driver adapter (`pg`), PostgreSQL,
+  `tsx` for dev/watch, ESLint 10 (flat) + Prettier.
+- **Frontend (`apps/web`):** Next.js 16 (App Router, React 19), Tailwind v4,
+  shadcn/ui. Talks to the API as a **BFF** — JWT in an httpOnly cookie, never in
+  the browser. See `docs/frontend.md`.
+- **Docker:** `docker-compose.yml` runs Postgres; the API `Dockerfile`
+  (`apps/api/Dockerfile`) is workspace-aware (build from repo root). A web image
+  is a follow-up.
 
 ## Commands
 
-```bash
-npm run dev              # tsx watch — run the API with reload
-npm run build            # tsc -> dist/
-npm run start            # node dist/index.js (run build first)
-npm run lint             # eslint .
-npm run lint:fix         # eslint . --fix
-npm run format           # prettier --write .
-npm run prisma:generate  # regenerate Prisma Client after schema edits
-npm run prisma:migrate   # prisma migrate dev — create/apply a dev migration
+Run from the **repo root** (npm workspaces):
 
-npx tsx prisma/seed.ts   # seed every table: characters, locations, creatures (re-runnable)
+```bash
+npm install              # one install for the whole workspace
+npm run dev              # both apps: API on :3000, web on :3001 (concurrently)
+npm run dev:api          # just the API (tsx watch)
+npm run dev:web          # just the web app (next dev -p 3001)
+npm run build            # build both apps
+npm run lint             # lint both apps
+npm run format           # prettier --write . (whole repo)
+npm run prisma:generate  # regenerate Prisma Client (-w @dnd/api)
+npm run prisma:migrate   # prisma migrate dev (-w @dnd/api)
+npm run seed             # seed every table incl. auth fixtures (-w @dnd/api)
 
 docker compose up -d db  # start local Postgres (healthchecked, named volume)
 docker compose down      # stop it (add -v to also drop the data volume)
 ```
 
-There is no test setup yet. Copy `.env.example` to `.env`, then
-`docker compose up -d db` before running the app or migrations.
+Backend-only workspace scripts (`build`/`start`/`lint:fix`) run with
+`-w @dnd/api`. There is no test setup yet. Copy `apps/api/.env.example` →
+`apps/api/.env` and `apps/web/.env.example` → `apps/web/.env.local`, then
+`docker compose up -d db` before running the apps or migrations.
 
 **Authoring a migration with raw SQL** (e.g. CHECK constraints — Prisma has no
-`@check`): `npx prisma migrate dev --name <name> --create-only`, hand-edit the
-generated `migration.sql`, then `npx prisma migrate dev` to apply.
+`@check`): from `apps/api/`, `npx prisma migrate dev --name <name> --create-only`,
+hand-edit the generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
 ## Current state (as of 2026-07-23)
 
-Data model complete; the full layered stack for **all PlayerCharacter-related
-data** and **all Creature (NPC/Monster) + Location data** is implemented, plus a
-**JWT auth + role-based authorization** layer and the `Player`/`Campaign`/
-`CampaignMembership` CRUD that backs it. Working on branch `feat/auth`.
+Data model complete; the full backend layered stack for **all
+PlayerCharacter-related data** and **all Creature (NPC/Monster) + Location data**
+is implemented, plus a **JWT auth + role-based authorization** layer and the
+`Player`/`Campaign`/`CampaignMembership` CRUD that backs it. The repo is now a
+**full-stack npm-workspaces monorepo**: the backend moved under `apps/api/`, a
+Next.js frontend (`apps/web/`) delivers the **auth slice** (register/login/
+logout + a dashboard reading `/auth/me`) via a BFF with an httpOnly-cookie
+session, and `packages/shared` holds the type-only API contract. Working on
+branch `feat/auth`.
 
 **Implemented:**
 

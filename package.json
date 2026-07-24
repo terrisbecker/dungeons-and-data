@@ -1,42 +1,26 @@
 {
   "name": "dungeons-and-data",
   "version": "0.1.0",
-  "description": "Node/Express + Prisma API",
-  "type": "module",
-  "main": "dist/index.js",
+  "private": true,
+  "description": "Full-stack D&D manager — Express/Prisma API + Next.js web",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "dev": "concurrently -n api,web -c blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev -w @dnd/api",
+    "dev:web": "npm run dev -w @dnd/web",
+    "build": "npm run build -w @dnd/api && npm run build -w @dnd/web",
+    "lint": "npm run lint -w @dnd/api && npm run lint -w @dnd/web",
     "format": "prettier --write .",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:generate": "npm run prisma:generate -w @dnd/api",
+    "prisma:migrate": "npm run prisma:migrate -w @dnd/api",
+    "seed": "npm run seed -w @dnd/api"
   },
   "license": "MIT",
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.9.0",
-    "@prisma/client": "^7.9.0",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "pg": "^8.22.0"
-  },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^26.1.1",
-    "@types/pg": "^8.20.0",
-    "dotenv": "^17.4.2",
-    "eslint": "^10.7.0",
-    "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.9.5",
-    "prisma": "^7.9.0",
-    "tsx": "^4.23.1",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "concurrently": "^9.1.0",
+    "prettier": "^3.9.5"
   }
 }
