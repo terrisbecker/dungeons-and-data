@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeftIcon } from "lucide-react";
-import type { Ability, CharacterSheet, Skill } from "@dnd/shared";
+import type { Ability, CharacterSheet } from "@dnd/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +11,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import {
+  ClassesSection,
+  ConditionsSection,
+  ProficienciesSection,
+  ResourcesSection,
+  SkillsSection,
+  SpellSlotsSection,
+} from "./character-sheet-sections";
 
 // --- Presentational reference data -----------------------------------------
 
@@ -69,27 +77,6 @@ const ABILITIES: {
   },
 ];
 
-const SKILLS: { key: Skill; label: string; ability: Ability }[] = [
-  { key: "ACROBATICS", label: "Acrobatics", ability: "DEX" },
-  { key: "ANIMAL_HANDLING", label: "Animal Handling", ability: "WIS" },
-  { key: "ARCANA", label: "Arcana", ability: "INT" },
-  { key: "ATHLETICS", label: "Athletics", ability: "STR" },
-  { key: "DECEPTION", label: "Deception", ability: "CHA" },
-  { key: "HISTORY", label: "History", ability: "INT" },
-  { key: "INSIGHT", label: "Insight", ability: "WIS" },
-  { key: "INTIMIDATION", label: "Intimidation", ability: "CHA" },
-  { key: "INVESTIGATION", label: "Investigation", ability: "INT" },
-  { key: "MEDICINE", label: "Medicine", ability: "WIS" },
-  { key: "NATURE", label: "Nature", ability: "INT" },
-  { key: "PERCEPTION", label: "Perception", ability: "WIS" },
-  { key: "PERFORMANCE", label: "Performance", ability: "CHA" },
-  { key: "PERSUASION", label: "Persuasion", ability: "CHA" },
-  { key: "RELIGION", label: "Religion", ability: "INT" },
-  { key: "SLEIGHT_OF_HAND", label: "Sleight of Hand", ability: "DEX" },
-  { key: "STEALTH", label: "Stealth", ability: "DEX" },
-  { key: "SURVIVAL", label: "Survival", ability: "WIS" },
-];
-
 const ALIGNMENTS: Record<string, string> = {
   LG: "Lawful Good",
   NG: "Neutral Good",
@@ -111,12 +98,6 @@ const SIZES: Record<string, string> = {
   GARGANTUAN: "Gargantuan",
 };
 
-const PROFICIENCY_LABEL: Record<string, string> = {
-  PROFICIENT: "Proficient",
-  EXPERTISE: "Expertise",
-  HALF: "Half",
-};
-
 function fmt(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
 }
@@ -136,7 +117,6 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
   const d = sheet.derived;
-  const skillProf = new Map(sheet.skills.map((s) => [s.skill, s.proficiency]));
 
   const classLine = sheet.classes.length
     ? sheet.classes
@@ -283,45 +263,18 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
           </CardContent>
         </Card>
 
-        {/* Skills */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Skills</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-1 sm:grid-cols-2">
-              {SKILLS.map((s) => {
-                const prof = skillProf.get(s.key);
-                return (
-                  <div
-                    key={s.key}
-                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm"
-                  >
-                    <span className="flex items-center gap-2">
-                      <span className="tabular-nums">
-                        {fmt(d.skills[s.key])}
-                      </span>
-                      <span className={prof ? "font-medium" : ""}>
-                        {s.label}
-                      </span>
-                      <span className="text-muted-foreground text-xs">
-                        ({s.ability})
-                      </span>
-                    </span>
-                    {prof && (
-                      <Badge variant="outline" className="text-xs">
-                        {PROFICIENCY_LABEL[prof]}
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Classes */}
+        <ClassesSection characterId={sheet.id} classes={sheet.classes} />
 
-        {/* Spellcasting */}
-        {(d.spellcasting.length > 0 || sheet.spellSlots.length > 0) && (
+        {/* Skills */}
+        <SkillsSection
+          characterId={sheet.id}
+          skills={sheet.skills}
+          skillModifiers={d.skills}
+        />
+
+        {/* Spellcasting (computed save DC / attack) */}
+        {d.spellcasting.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Spellcasting</CardTitle>
@@ -340,16 +293,6 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
                   </Badge>
                 </div>
               ))}
-              {sheet.spellSlots.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {sheet.spellSlots.map((slot) => (
-                    <Badge key={slot.id} variant="outline">
-                      {slot.isPact ? "Pact" : `Lvl ${slot.level}`}:{" "}
-                      {slot.max - slot.used}/{slot.max}
-                    </Badge>
-                  ))}
-                </div>
-              )}
               {sheet.spells.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {sheet.spells.map((s) => (
@@ -364,32 +307,20 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
           </Card>
         )}
 
+        {/* Spell slots */}
+        <SpellSlotsSection
+          characterId={sheet.id}
+          spellSlots={sheet.spellSlots}
+        />
+
         {/* Resources */}
-        {sheet.resources.length > 0 && (
-          <ListCard title="Resources">
-            <div className="flex flex-wrap gap-2">
-              {sheet.resources.map((r) => (
-                <Badge key={r.id} variant="outline">
-                  {r.name}: {r.current}/{r.max}
-                </Badge>
-              ))}
-            </div>
-          </ListCard>
-        )}
+        <ResourcesSection characterId={sheet.id} resources={sheet.resources} />
 
         {/* Conditions */}
-        {sheet.conditions.length > 0 && (
-          <ListCard title="Conditions">
-            <div className="flex flex-wrap gap-2">
-              {sheet.conditions.map((c) => (
-                <Badge key={c.id} variant="destructive">
-                  {c.name}
-                  {c.level != null && ` ${c.level}`}
-                </Badge>
-              ))}
-            </div>
-          </ListCard>
-        )}
+        <ConditionsSection
+          characterId={sheet.id}
+          conditions={sheet.conditions}
+        />
 
         {/* Features */}
         {sheet.features.length > 0 && (
@@ -427,20 +358,10 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
         )}
 
         {/* Proficiencies */}
-        {sheet.proficiencies.length > 0 && (
-          <ListCard title="Proficiencies">
-            <div className="flex flex-wrap gap-1.5">
-              {sheet.proficiencies.map((p) => (
-                <Badge key={p.id} variant="outline">
-                  {p.name}
-                  <span className="text-muted-foreground ml-1 text-xs">
-                    {p.type}
-                  </span>
-                </Badge>
-              ))}
-            </div>
-          </ListCard>
-        )}
+        <ProficienciesSection
+          characterId={sheet.id}
+          proficiencies={sheet.proficiencies}
+        />
 
         {/* Inventory */}
         {sheet.inventory.length > 0 && (

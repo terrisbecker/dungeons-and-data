@@ -3,17 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeftIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ChevronLeftIcon } from "lucide-react";
 import { toast } from "sonner";
 import type {
   Ability,
   Alignment,
-  CharacterClassInput,
-  CharacterSkillInput,
   CreateCharacterInput,
   CreatureSize,
-  Skill,
-  SkillProficiency,
 } from "@dnd/shared";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,86 +91,12 @@ const SIZES: Record<CreatureSize, string> = {
   GARGANTUAN: "Gargantuan",
 };
 
-const HIT_DICE: Record<string, string> = {
-  "6": "d6",
-  "8": "d8",
-  "10": "d10",
-  "12": "d12",
-};
-
-const CASTING_ABILITIES: Record<string, string> = {
-  NONE: "Non-caster",
-  INT: "Intelligence",
-  WIS: "Wisdom",
-  CHA: "Charisma",
-  STR: "Strength",
-  DEX: "Dexterity",
-  CON: "Constitution",
-};
-
-const SKILLS: { key: Skill; label: string; ability: Ability }[] = [
-  { key: "ACROBATICS", label: "Acrobatics", ability: "DEX" },
-  { key: "ANIMAL_HANDLING", label: "Animal Handling", ability: "WIS" },
-  { key: "ARCANA", label: "Arcana", ability: "INT" },
-  { key: "ATHLETICS", label: "Athletics", ability: "STR" },
-  { key: "DECEPTION", label: "Deception", ability: "CHA" },
-  { key: "HISTORY", label: "History", ability: "INT" },
-  { key: "INSIGHT", label: "Insight", ability: "WIS" },
-  { key: "INTIMIDATION", label: "Intimidation", ability: "CHA" },
-  { key: "INVESTIGATION", label: "Investigation", ability: "INT" },
-  { key: "MEDICINE", label: "Medicine", ability: "WIS" },
-  { key: "NATURE", label: "Nature", ability: "INT" },
-  { key: "PERCEPTION", label: "Perception", ability: "WIS" },
-  { key: "PERFORMANCE", label: "Performance", ability: "CHA" },
-  { key: "PERSUASION", label: "Persuasion", ability: "CHA" },
-  { key: "RELIGION", label: "Religion", ability: "INT" },
-  { key: "SLEIGHT_OF_HAND", label: "Sleight of Hand", ability: "DEX" },
-  { key: "STEALTH", label: "Stealth", ability: "DEX" },
-  { key: "SURVIVAL", label: "Survival", ability: "WIS" },
-];
-
-const SKILL_PROFICIENCY: Record<string, string> = {
-  NONE: "—",
-  PROFICIENT: "Proficient",
-  EXPERTISE: "Expertise",
-  HALF: "Half",
-};
-
-const STEPS = [
-  "Identity",
-  "Class",
-  "Abilities",
-  "Combat",
-  "Skills",
-  "Roleplay",
-  "Review",
-];
+// The wizard now captures only the main PlayerCharacter row. Classes, skills,
+// spells, feats, items and other satellite-table data are added afterwards from
+// the character sheet, each with its own "Add" section.
+const STEPS = ["Identity", "Abilities", "Combat", "Roleplay", "Review"];
 
 // --- Local form state ------------------------------------------------------
-
-interface ClassRow {
-  className: string;
-  subclass: string;
-  level: string;
-  hitDieSize: string;
-  spellcastingAbility: string; // "NONE" | Ability
-}
-
-function emptyClass(): ClassRow {
-  return {
-    className: "",
-    subclass: "",
-    level: "1",
-    hitDieSize: "8",
-    spellcastingAbility: "NONE",
-  };
-}
-
-type SkillState = Record<Skill, "NONE" | SkillProficiency>;
-
-function emptySkills(): SkillState {
-  return Object.fromEntries(SKILLS.map((s) => [s.key, "NONE"])) as SkillState;
-}
 
 interface FormState {
   characterName: string;
@@ -291,8 +213,6 @@ export function CharacterWizard({
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initialForm);
-  const [classes, setClasses] = useState<ClassRow[]>([emptyClass()]);
-  const [skills, setSkills] = useState<SkillState>(emptySkills);
   const [submitting, setSubmitting] = useState(false);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -303,11 +223,6 @@ export function CharacterWizard({
 
   const toggleSave = (field: SaveField) =>
     setForm((f) => ({ ...f, saves: { ...f.saves, [field]: !f.saves[field] } }));
-
-  const setClass = (i: number, patch: Partial<ClassRow>) =>
-    setClasses((rows) =>
-      rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
-    );
 
   const applyStandardArray = () => {
     setForm((f) => ({
@@ -330,14 +245,6 @@ export function CharacterWizard({
       if (!form.race.trim()) return "Enter a race.";
     }
     if (current === 1) {
-      if (classes.length === 0) return "Add at least one class.";
-      for (const c of classes) {
-        if (!c.className.trim()) return "Each class needs a name.";
-        const level = optNum(c.level);
-        if (level === undefined || level < 1) return "Class level must be ≥ 1.";
-      }
-    }
-    if (current === 2) {
       for (const a of ABILITIES) {
         const v = optNum(form.scores[a.field]);
         if (v === undefined || v < 1 || v > 30) {
@@ -345,7 +252,7 @@ export function CharacterWizard({
         }
       }
     }
-    if (current === 3) {
+    if (current === 2) {
       const max = optNum(form.maxHitPoints);
       if (max === undefined || max < 0) return "Enter max hit points (≥ 0).";
       const ac = optNum(form.armorClass);
@@ -375,24 +282,6 @@ export function CharacterWizard({
   function buildPayload(): CreateCharacterInput {
     const max = optNum(form.maxHitPoints) ?? 0;
     const current = optNum(form.currentHitPoints) ?? max;
-
-    const classInputs: CharacterClassInput[] = classes.map((c) => ({
-      className: c.className.trim(),
-      subclass: optText(c.subclass) ?? null,
-      level: optNum(c.level) ?? 1,
-      hitDieSize: Number(c.hitDieSize),
-      spellcastingAbility:
-        c.spellcastingAbility === "NONE"
-          ? null
-          : (c.spellcastingAbility as Ability),
-    }));
-
-    const skillInputs: CharacterSkillInput[] = SKILLS.filter(
-      (s) => skills[s.key] !== "NONE",
-    ).map((s) => ({
-      skill: s.key,
-      proficiency: skills[s.key] as SkillProficiency,
-    }));
 
     return {
       characterName: form.characterName.trim(),
@@ -434,15 +323,12 @@ export function CharacterWizard({
       ideals: optText(form.ideals) ?? null,
       bonds: optText(form.bonds) ?? null,
       flaws: optText(form.flaws) ?? null,
-
-      classes: classInputs,
-      skills: skillInputs,
     };
   }
 
   async function submit() {
     // Re-validate every gated step before the network call.
-    for (let s = 0; s <= 3; s++) {
+    for (let s = 0; s <= 2; s++) {
       const error = validateStep(s);
       if (error) {
         toast.error(error);
@@ -501,16 +387,6 @@ export function CharacterWizard({
             <IdentityStep form={form} set={set} campaigns={campaigns} />
           )}
           {step === 1 && (
-            <ClassStep
-              classes={classes}
-              setClass={setClass}
-              addClass={() => setClasses((r) => [...r, emptyClass()])}
-              removeClass={(i) =>
-                setClasses((r) => r.filter((_, idx) => idx !== i))
-              }
-            />
-          )}
-          {step === 2 && (
             <AbilitiesStep
               form={form}
               setScore={setScore}
@@ -518,17 +394,9 @@ export function CharacterWizard({
               applyStandardArray={applyStandardArray}
             />
           )}
-          {step === 3 && <CombatStep form={form} set={set} />}
-          {step === 4 && <SkillsStep skills={skills} setSkills={setSkills} />}
-          {step === 5 && <RoleplayStep form={form} set={set} />}
-          {step === 6 && (
-            <ReviewStep
-              form={form}
-              classes={classes}
-              skills={skills}
-              campaigns={campaigns}
-            />
-          )}
+          {step === 2 && <CombatStep form={form} set={set} />}
+          {step === 3 && <RoleplayStep form={form} set={set} />}
+          {step === 4 && <ReviewStep form={form} campaigns={campaigns} />}
 
           <Separator />
 
@@ -546,6 +414,11 @@ export function CharacterWizard({
           </div>
         </CardContent>
       </Card>
+
+      <p className="text-muted-foreground mt-4 text-center text-sm">
+        Classes, skills, spells, feats, items and more are added from the
+        character sheet after you create the character.
+      </p>
     </main>
   );
 }
@@ -714,93 +587,6 @@ function IdentityStep({
             items={campaignItems}
           />
         </Field>
-      </div>
-    </div>
-  );
-}
-
-function ClassStep({
-  classes,
-  setClass,
-  addClass,
-  removeClass,
-}: {
-  classes: ClassRow[];
-  setClass: (i: number, patch: Partial<ClassRow>) => void;
-  addClass: () => void;
-  removeClass: (i: number) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      {classes.map((c, i) => (
-        <div key={i} className="rounded-lg border p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-medium">
-              {classes.length > 1 ? `Class ${i + 1}` : "Class"}
-            </p>
-            {classes.length > 1 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removeClass(i)}
-                aria-label="Remove class"
-              >
-                <Trash2Icon />
-              </Button>
-            )}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field id={`className-${i}`} label="Class name">
-              <Input
-                id={`className-${i}`}
-                value={c.className}
-                onChange={(e) => setClass(i, { className: e.target.value })}
-                placeholder="Wizard, Fighter…"
-              />
-            </Field>
-            <Field id={`subclass-${i}`} label="Subclass (optional)">
-              <Input
-                id={`subclass-${i}`}
-                value={c.subclass}
-                onChange={(e) => setClass(i, { subclass: e.target.value })}
-                placeholder="Evocation…"
-              />
-            </Field>
-            <Field id={`level-${i}`} label="Level">
-              <Input
-                id={`level-${i}`}
-                type="number"
-                min={1}
-                value={c.level}
-                onChange={(e) => setClass(i, { level: e.target.value })}
-              />
-            </Field>
-            <Field id={`hitDie-${i}`} label="Hit die">
-              <EnumSelect
-                id={`hitDie-${i}`}
-                value={c.hitDieSize}
-                onValueChange={(v) => setClass(i, { hitDieSize: v })}
-                items={HIT_DICE}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field id={`casting-${i}`} label="Spellcasting ability">
-                <EnumSelect
-                  id={`casting-${i}`}
-                  value={c.spellcastingAbility}
-                  onValueChange={(v) => setClass(i, { spellcastingAbility: v })}
-                  items={CASTING_ABILITIES}
-                />
-              </Field>
-            </div>
-          </div>
-        </div>
-      ))}
-      <div>
-        <Button variant="outline" size="sm" onClick={addClass}>
-          <PlusIcon />
-          Add another class
-        </Button>
       </div>
     </div>
   );
@@ -982,44 +768,6 @@ function CombatStep({
   );
 }
 
-function SkillsStep({
-  skills,
-  setSkills,
-}: {
-  skills: SkillState;
-  setSkills: React.Dispatch<React.SetStateAction<SkillState>>;
-}) {
-  return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {SKILLS.map((s) => (
-        <div
-          key={s.key}
-          className="flex items-center justify-between gap-3 rounded-md border p-2 pl-3"
-        >
-          <span className="text-sm">
-            {s.label}
-            <span className="text-muted-foreground ml-1 text-xs">
-              ({s.ability})
-            </span>
-          </span>
-          <div className="w-32 shrink-0">
-            <EnumSelect
-              value={skills[s.key]}
-              onValueChange={(v) =>
-                setSkills((prev) => ({
-                  ...prev,
-                  [s.key]: v as "NONE" | SkillProficiency,
-                }))
-              }
-              items={SKILL_PROFICIENCY}
-            />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function RoleplayStep({
   form,
   set,
@@ -1126,22 +874,11 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
 
 function ReviewStep({
   form,
-  classes,
-  skills,
   campaigns,
 }: {
   form: FormState;
-  classes: ClassRow[];
-  skills: SkillState;
   campaigns: { id: string; name: string }[];
 }) {
-  const classLine = classes
-    .filter((c) => c.className.trim())
-    .map((c) => `${c.className.trim()} ${c.level}`)
-    .join(" / ");
-  const chosenSkills = SKILLS.filter((s) => skills[s.key] !== "NONE")
-    .map((s) => s.label)
-    .join(", ");
   const savingThrows = ABILITIES.filter((a) => form.saves[SAVE_FIELD[a.field]])
     .map((a) => a.key)
     .join(", ");
@@ -1151,35 +888,39 @@ function ReviewStep({
       : (campaigns.find((c) => c.id === form.campaignId)?.name ?? "—");
 
   return (
-    <div className="flex flex-col gap-1 divide-y">
-      <ReviewRow label="Name" value={form.characterName || "—"} />
-      <ReviewRow
-        label="Race"
-        value={[form.race, form.subrace].filter(Boolean).join(" · ") || "—"}
-      />
-      <ReviewRow
-        label="Alignment"
-        value={
-          form.alignment === "NONE"
-            ? "Unaligned"
-            : ALIGNMENTS[form.alignment as Alignment]
-        }
-      />
-      <ReviewRow label="Size" value={SIZES[form.size]} />
-      <ReviewRow label="Classes" value={classLine || "—"} />
-      <ReviewRow
-        label="Ability scores"
-        value={ABILITIES.map((a) => form.scores[a.field]).join(" / ")}
-      />
-      <ReviewRow label="Saving throws" value={savingThrows || "None"} />
-      <ReviewRow
-        label="HP / AC"
-        value={`${form.currentHitPoints || form.maxHitPoints || "0"}/${
-          form.maxHitPoints || "0"
-        } · AC ${form.armorClass || "—"}`}
-      />
-      <ReviewRow label="Skills" value={chosenSkills || "None"} />
-      <ReviewRow label="Campaign" value={campaignName} />
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1 divide-y">
+        <ReviewRow label="Name" value={form.characterName || "—"} />
+        <ReviewRow
+          label="Race"
+          value={[form.race, form.subrace].filter(Boolean).join(" · ") || "—"}
+        />
+        <ReviewRow
+          label="Alignment"
+          value={
+            form.alignment === "NONE"
+              ? "Unaligned"
+              : ALIGNMENTS[form.alignment as Alignment]
+          }
+        />
+        <ReviewRow label="Size" value={SIZES[form.size]} />
+        <ReviewRow
+          label="Ability scores"
+          value={ABILITIES.map((a) => form.scores[a.field]).join(" / ")}
+        />
+        <ReviewRow label="Saving throws" value={savingThrows || "None"} />
+        <ReviewRow
+          label="HP / AC"
+          value={`${form.currentHitPoints || form.maxHitPoints || "0"}/${
+            form.maxHitPoints || "0"
+          } · AC ${form.armorClass || "—"}`}
+        />
+        <ReviewRow label="Campaign" value={campaignName} />
+      </div>
+      <p className="text-muted-foreground text-sm">
+        You&apos;ll add classes, skills, spells, feats, items and other details
+        from the character sheet next.
+      </p>
     </div>
   );
 }

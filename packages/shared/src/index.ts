@@ -128,8 +128,40 @@ export interface CharacterSkillInput {
   proficiency: SkillProficiency;
 }
 
+// A per-level spell slot track (POST /spell-slots), sans characterId.
+export interface SpellSlotInput {
+  level: number; // 1–9
+  max: number;
+  used?: number;
+  isPact?: boolean;
+}
+
+// A limited-use resource pool (POST /character-resources), sans characterId.
+export interface CharacterResourceInput {
+  name: string;
+  current: number;
+  max: number;
+  rechargeOn?: RestType;
+}
+
+// A weapon/armor/tool/language/save proficiency (POST /proficiencies).
+export interface ProficiencyInput {
+  type: string;
+  name: string;
+}
+
+// An active status effect (POST /character-conditions), sans characterId.
+export interface CharacterConditionInput {
+  name: string;
+  level?: number | null;
+  notes?: string | null;
+}
+
 // The wizard payload sent to the BFF (POST /api/characters). The server injects
-// `playerId` (the current player) — the client never sets it.
+// `playerId` (the current player) — the client never sets it. The wizard now
+// only collects the main PlayerCharacter row; classes/skills and the other
+// satellite-table data are added afterwards from the character sheet, so both
+// arrays are optional here.
 export interface CreateCharacterInput {
   characterName: string;
   race: string;
@@ -175,8 +207,8 @@ export interface CreateCharacterInput {
   bonds?: string | null;
   flaws?: string | null;
 
-  classes: CharacterClassInput[];
-  skills: CharacterSkillInput[];
+  classes?: CharacterClassInput[];
+  skills?: CharacterSkillInput[];
 }
 
 // Service-layer computed block (mirrors characters.derived.ts:DerivedStats).
