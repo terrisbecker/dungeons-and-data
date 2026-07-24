@@ -114,9 +114,10 @@ export default async function DashboardPage() {
           {characters.length > 0 && (
             <CardContent className="flex flex-col gap-2">
               {characters.map((c) => (
-                <div
+                <Link
                   key={c.id}
-                  className="flex items-center justify-between rounded-md border p-3"
+                  href={`/characters/${c.id}`}
+                  className="hover:bg-muted/50 flex items-center justify-between rounded-md border p-3 transition-colors"
                 >
                   <div>
                     <p className="font-medium">{c.characterName}</p>
@@ -125,7 +126,7 @@ export default async function DashboardPage() {
                   <span className="text-muted-foreground text-sm">
                     HP {c.currentHitPoints}/{c.maxHitPoints} · AC {c.armorClass}
                   </span>
-                </div>
+                </Link>
               ))}
             </CardContent>
           )}

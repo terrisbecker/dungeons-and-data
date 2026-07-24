@@ -71,6 +71,253 @@ export interface CharacterSummary {
   updatedAt: string;
 }
 
+// --- Character creation + sheet -------------------------------------------
+
+// The fixed 5e enum sets, mirrored from the Prisma schema as string unions.
+export type Ability = "STR" | "DEX" | "CON" | "INT" | "WIS" | "CHA";
+export type Alignment =
+  "LG" | "NG" | "CG" | "LN" | "TN" | "CN" | "LE" | "NE" | "CE";
+export type CreatureSize =
+  "TINY" | "SMALL" | "MEDIUM" | "LARGE" | "HUGE" | "GARGANTUAN";
+export type Skill =
+  | "ACROBATICS"
+  | "ANIMAL_HANDLING"
+  | "ARCANA"
+  | "ATHLETICS"
+  | "DECEPTION"
+  | "HISTORY"
+  | "INSIGHT"
+  | "INTIMIDATION"
+  | "INVESTIGATION"
+  | "MEDICINE"
+  | "NATURE"
+  | "PERCEPTION"
+  | "PERFORMANCE"
+  | "PERSUASION"
+  | "RELIGION"
+  | "SLEIGHT_OF_HAND"
+  | "STEALTH"
+  | "SURVIVAL";
+export type SkillProficiency = "PROFICIENT" | "EXPERTISE" | "HALF";
+export type RestType = "SHORT" | "LONG";
+export type SpellSchool =
+  | "ABJURATION"
+  | "CONJURATION"
+  | "DIVINATION"
+  | "ENCHANTMENT"
+  | "EVOCATION"
+  | "ILLUSION"
+  | "NECROMANCY"
+  | "TRANSMUTATION";
+export type FeatureSource =
+  "RACE" | "CLASS" | "SUBCLASS" | "BACKGROUND" | "FEAT";
+
+// A class a character has levels in (POST /character-classes). `characterId` is
+// added by the creation flow, so the wizard omits it here.
+export interface CharacterClassInput {
+  className: string;
+  subclass?: string | null;
+  level: number;
+  hitDieSize: number; // 6, 8, 10, 12
+  spellcastingAbility?: Ability | null;
+}
+
+// A skill proficiency (POST /character-skills), sans characterId.
+export interface CharacterSkillInput {
+  skill: Skill;
+  proficiency: SkillProficiency;
+}
+
+// The wizard payload sent to the BFF (POST /api/characters). The server injects
+// `playerId` (the current player) — the client never sets it.
+export interface CreateCharacterInput {
+  characterName: string;
+  race: string;
+  subrace?: string | null;
+  alignment?: Alignment | null;
+  size?: CreatureSize;
+  background?: string | null;
+  campaignId?: string | null;
+
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+
+  strengthSaveProf?: boolean;
+  dexteritySaveProf?: boolean;
+  constitutionSaveProf?: boolean;
+  intelligenceSaveProf?: boolean;
+  wisdomSaveProf?: boolean;
+  charismaSaveProf?: boolean;
+
+  maxHitPoints: number;
+  currentHitPoints: number;
+  temporaryHitPoints?: number;
+  armorClass: number;
+  speed?: number;
+  flySpeed?: number | null;
+  swimSpeed?: number | null;
+  climbSpeed?: number | null;
+  darkvision?: number | null;
+
+  copper?: number;
+  silver?: number;
+  electrum?: number;
+  gold?: number;
+  platinum?: number;
+
+  description?: string | null;
+  traits?: string | null;
+  ideals?: string | null;
+  bonds?: string | null;
+  flaws?: string | null;
+
+  classes: CharacterClassInput[];
+  skills: CharacterSkillInput[];
+}
+
+// Service-layer computed block (mirrors characters.derived.ts:DerivedStats).
+export interface DerivedStats {
+  totalLevel: number;
+  proficiencyBonus: number;
+  initiative: number;
+  abilityModifiers: Record<Ability, number>;
+  savingThrows: Record<Ability, number>;
+  skills: Record<Skill, number>;
+  passivePerception: number;
+  passiveInvestigation: number;
+  passiveInsight: number;
+  spellcasting: Array<{
+    className: string;
+    ability: Ability;
+    saveDc: number;
+    attackBonus: number;
+  }>;
+}
+
+// The full virtual character sheet (GET /characters/:id/sheet). Mirrors
+// characterSheetSelect in characters.queries.ts, plus the derived block.
+export interface CharacterSheet {
+  id: string;
+  characterName: string;
+  race: string;
+  subrace: string | null;
+  alignment: Alignment | null;
+  size: CreatureSize;
+  experiencePoints: number;
+  inspiration: boolean;
+
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+
+  strengthSaveProf: boolean;
+  dexteritySaveProf: boolean;
+  constitutionSaveProf: boolean;
+  intelligenceSaveProf: boolean;
+  wisdomSaveProf: boolean;
+  charismaSaveProf: boolean;
+
+  maxHitPoints: number;
+  currentHitPoints: number;
+  temporaryHitPoints: number;
+  hitPointMaxModifier: number;
+  armorClass: number;
+  deathSaveSuccesses: number;
+  deathSaveFailures: number;
+
+  speed: number;
+  flySpeed: number | null;
+  swimSpeed: number | null;
+  climbSpeed: number | null;
+  darkvision: number | null;
+  concentratingOnSpellId: string | null;
+
+  copper: number;
+  silver: number;
+  electrum: number;
+  gold: number;
+  platinum: number;
+
+  description: string | null;
+  background: string | null;
+  traits: string | null;
+  ideals: string | null;
+  bonds: string | null;
+  flaws: string | null;
+
+  playerId: string | null;
+  campaignId: string | null;
+  createdAt: string;
+  updatedAt: string;
+
+  classes: Array<{
+    id: string;
+    className: string;
+    subclass: string | null;
+    level: number;
+    hitDieSize: number;
+    hitDiceUsed: number;
+    spellcastingAbility: Ability | null;
+  }>;
+  skills: Array<{ id: string; skill: Skill; proficiency: SkillProficiency }>;
+  spellSlots: Array<{
+    id: string;
+    level: number;
+    max: number;
+    used: number;
+    isPact: boolean;
+  }>;
+  resources: Array<{
+    id: string;
+    name: string;
+    current: number;
+    max: number;
+    rechargeOn: RestType;
+  }>;
+  proficiencies: Array<{ id: string; type: string; name: string }>;
+  conditions: Array<{
+    id: string;
+    name: string;
+    level: number | null;
+    notes: string | null;
+  }>;
+  spells: Array<{
+    known: boolean;
+    prepared: boolean;
+    alwaysPrepared: boolean;
+    sourceClass: string | null;
+    spell: { id: string; name: string; level: number; school: SpellSchool };
+  }>;
+  feats: Array<{
+    feat: { id: string; name: string; description: string | null };
+  }>;
+  features: Array<{
+    notes: string | null;
+    feature: { id: string; name: string; source: FeatureSource };
+  }>;
+  inventory: Array<{
+    id: string;
+    quantity: number;
+    equipped: boolean;
+    attuned: boolean;
+    item: {
+      id: string;
+      name: string;
+      type: string;
+      rarity: string;
+      requiresAttunement: boolean;
+    };
+  }>;
+  derived: DerivedStats;
+}
+
 // The API's generic error body: { "error": "…" }.
 export interface ApiError {
   error: string;

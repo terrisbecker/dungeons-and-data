@@ -7,7 +7,7 @@ import { SESSION_COOKIE } from "@/lib/session-config";
 // here; the API is the real authority when a request actually reaches it).
 
 const AUTH_PAGES = ["/login", "/register"];
-const PROTECTED_PREFIXES = ["/dashboard", "/campaigns"];
+const PROTECTED_PREFIXES = ["/dashboard", "/campaigns", "/characters"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

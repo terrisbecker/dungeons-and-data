@@ -2,6 +2,7 @@ import type {
   ApiError,
   AuthResponse,
   Campaign,
+  CharacterSheet,
   CharacterSummary,
   MeResponse,
 } from "@dnd/shared";
@@ -76,6 +77,45 @@ export function getMyCharacters(playerId: string): Promise<CharacterSummary[]> {
   return serverFetch<CharacterSummary[]>(
     `/characters?playerId=${encodeURIComponent(playerId)}`,
   );
+}
+
+// The full virtual character sheet (GET /characters/:id/sheet).
+export function getCharacterSheet(id: string): Promise<CharacterSheet> {
+  return serverFetch<CharacterSheet>(
+    `/characters/${encodeURIComponent(id)}/sheet`,
+  );
+}
+
+// Create a character (POST /characters). Returns the created row (incl. its id).
+export function createCharacter(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/characters", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// Attach a class to a character (POST /character-classes).
+export function createCharacterClass(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/character-classes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// Attach a skill proficiency to a character (POST /character-skills).
+export function createCharacterSkill(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/character-skills", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// Soft-delete a character (DELETE /characters/:id). Used to roll back a partial
+// creation when a child-row step fails.
+export function deleteCharacter(id: string): Promise<void> {
+  return serverFetch<void>(`/characters/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.
