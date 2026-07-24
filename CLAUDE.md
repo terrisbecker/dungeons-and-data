@@ -241,6 +241,12 @@ Working on branch `frontend/character-creation-wizard`.
 - No pagination. Auth is JWT-only (no refresh tokens, no revocation/blocklist —
   a token stays valid until it expires even if the account is later demoted).
 - No tests, no CI.
+- **Catalog in-use delete messaging:** deleting a catalog row that is still
+  referenced (an `Item` in an inventory, or a `Spell`/`Feat`/`Feature` on a
+  character) is correctly refused at the DB level (`onDelete: Restrict` → Prisma
+  `P2003`), but `mapPrismaError` turns that into a generic `400 Bad Request` with
+  no context. Improve this to a descriptive response (e.g. a `409` naming how
+  many inventories/characters still reference the row) so the UI toast is useful.
 - **Frontend gaps:** no editing/deleting of the main character row or the
   campaign roster from the UI; the sheet's catalog-backed sections (inventory
   items, spells, feats, features) are read-only (pick-from-catalog dialogs are a

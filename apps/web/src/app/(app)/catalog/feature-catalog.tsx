@@ -13,6 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect, Field } from "@/components/form-fields";
 import {
   CatalogManager,
+  DetailBody,
+  DetailHeader,
+  DetailRow,
+  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
@@ -51,6 +55,22 @@ export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
           editing={editing}
           close={close}
         />
+      )}
+      renderDetail={(feature) => (
+        <>
+          <DetailHeader
+            title={feature.name}
+            subtitle={SOURCES[feature.source]}
+          />
+          <DetailBody>
+            <DetailRow label="Subtype" value={feature.subtype} />
+            <DetailRow
+              label="Level"
+              value={feature.level != null ? feature.level : null}
+            />
+          </DetailBody>
+          <DetailText text={feature.description} />
+        </>
       )}
     />
   );

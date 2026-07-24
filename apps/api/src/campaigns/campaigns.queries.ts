@@ -58,6 +58,21 @@ export function findCampaignById(id: string) {
   });
 }
 
+// Seat a player in a campaign as a PLAYER. Used by the self-service join flow;
+// the player id always comes from the caller's token, never the request body.
+export function joinCampaignAsPlayer(campaignId: string, playerId: string) {
+  return prisma.campaignMembership.create({
+    data: { campaignId, playerId, role: CampaignRole.PLAYER },
+    select: {
+      id: true,
+      campaignId: true,
+      playerId: true,
+      role: true,
+      joinedAt: true,
+    },
+  });
+}
+
 export function updateCampaign(
   id: string,
   data: Prisma.CampaignUncheckedUpdateInput,

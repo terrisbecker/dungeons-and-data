@@ -15,6 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect, Field } from "@/components/form-fields";
 import {
   CatalogManager,
+  DetailBody,
+  DetailHeader,
+  DetailRow,
+  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
@@ -82,7 +86,66 @@ export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
       renderForm={({ editing, close }) => (
         <SpellForm key={editing?.id ?? "new"} editing={editing} close={close} />
       )}
+      renderDetail={(spell) => <SpellDetail spell={spell} />}
     />
+  );
+}
+
+function SpellDetail({ spell }: { spell: SpellCatalog }) {
+  const components = [
+    spell.verbal ? "V" : null,
+    spell.somatic ? "S" : null,
+    spell.material ? "M" : null,
+  ].filter(Boolean);
+
+  const tags = [
+    spell.concentration ? "Concentration" : null,
+    spell.ritual ? "Ritual" : null,
+  ].filter(Boolean);
+
+  return (
+    <>
+      <DetailHeader
+        title={spell.name}
+        subtitle={`${
+          spell.level === 0 ? "Cantrip" : `Level ${spell.level}`
+        }${spell.school ? ` · ${SCHOOLS[spell.school]}` : ""}`}
+      />
+      <DetailBody>
+        <DetailRow label="Casting time" value={spell.castingTime} />
+        <DetailRow label="Range" value={spell.range} />
+        <DetailRow label="Duration" value={spell.duration} />
+        <DetailRow
+          label="Components"
+          value={
+            components.length > 0
+              ? `${components.join(", ")}${
+                  spell.material && spell.materialComponent
+                    ? ` (${spell.materialComponent})`
+                    : ""
+                }`
+              : null
+          }
+        />
+        <DetailRow
+          label="Save"
+          value={spell.savingThrow ? ABILITIES[spell.savingThrow] : null}
+        />
+        <DetailRow
+          label="Damage"
+          value={spell.damageType ? DAMAGE_TYPES[spell.damageType] : null}
+        />
+        <DetailRow label="Attack roll" value={spell.isAttack ? "Yes" : null} />
+        <DetailRow label="" value={tags.length > 0 ? tags.join(" · ") : null} />
+      </DetailBody>
+      <DetailText text={spell.description} />
+      {spell.higherLevel ? (
+        <p className="mt-2 whitespace-pre-wrap">
+          <span className="font-medium">At higher levels. </span>
+          <span className="text-muted-foreground">{spell.higherLevel}</span>
+        </p>
+      ) : null}
+    </>
   );
 }
 

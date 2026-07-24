@@ -2,6 +2,7 @@ import type {
   ApiError,
   AuthResponse,
   Campaign,
+  CampaignRole,
   CharacterSheet,
   CharacterSummary,
   FeatCatalog,
@@ -74,6 +75,21 @@ export function createCampaign(body: unknown): Promise<Campaign> {
 // A single campaign with its roster (GET /campaigns/:id).
 export function getCampaign(id: string): Promise<Campaign> {
   return serverFetch<Campaign>(`/campaigns/${id}`);
+}
+
+// Join a campaign as a PLAYER by its id (POST /campaigns/:id/join). The API
+// seats the caller (from the token) — the id is only used to find the campaign.
+// Returns the created membership row (the lean shape the API create returns).
+export function joinCampaign(id: string): Promise<{
+  id: string;
+  campaignId: string;
+  playerId: string;
+  role: CampaignRole;
+  joinedAt: string;
+}> {
+  return serverFetch(`/campaigns/${encodeURIComponent(id)}/join`, {
+    method: "POST",
+  });
 }
 
 // A player's own characters (GET /characters?playerId=…).

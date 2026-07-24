@@ -18,6 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect, Field } from "@/components/form-fields";
 import {
   CatalogManager,
+  DetailBody,
+  DetailHeader,
+  DetailRow,
+  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
@@ -123,7 +127,127 @@ export function ItemCatalogManager({ rows }: { rows: ItemCatalog[] }) {
       renderForm={({ editing, close }) => (
         <ItemForm key={editing?.id ?? "new"} editing={editing} close={close} />
       )}
+      renderDetail={(item) => <ItemDetail item={item} />}
     />
+  );
+}
+
+function ItemDetail({ item }: { item: ItemCatalog }) {
+  const flags = [
+    item.isMagic ? "Magic" : null,
+    item.requiresAttunement ? "Attunement" : null,
+    item.stackable ? "Stackable" : null,
+    item.consumable ? "Consumable" : null,
+  ].filter(Boolean);
+
+  return (
+    <>
+      <DetailHeader
+        title={item.name}
+        subtitle={`${TYPES[item.type]} · ${RARITIES[item.rarity]}`}
+      />
+      <DetailBody>
+        <DetailRow
+          label="Value"
+          value={
+            item.baseValueCp != null ? `${item.baseValueCp} cp` : "Priceless"
+          }
+        />
+        <DetailRow
+          label="Weight"
+          value={item.weight != null ? `${item.weight} lb` : null}
+        />
+        <DetailRow
+          label="Tags"
+          value={
+            item.tags && item.tags.length > 0 ? item.tags.join(", ") : null
+          }
+        />
+        <DetailRow
+          label=""
+          value={flags.length > 0 ? flags.join(" · ") : null}
+        />
+
+        {item.type === "WEAPON" && (
+          <>
+            <DetailRow
+              label="Category"
+              value={
+                item.weaponCategory
+                  ? WEAPON_CATEGORIES[item.weaponCategory]
+                  : null
+              }
+            />
+            <DetailRow
+              label="Damage"
+              value={
+                item.damageDice
+                  ? `${item.damageDice}${
+                      item.damageType
+                        ? ` ${DAMAGE_TYPES[item.damageType].toLowerCase()}`
+                        : ""
+                    }`
+                  : null
+              }
+            />
+            <DetailRow label="Versatile" value={item.versatileDamage} />
+            <DetailRow
+              label="Range"
+              value={
+                item.rangeNormal != null
+                  ? `${item.rangeNormal}${
+                      item.rangeLong != null ? `/${item.rangeLong}` : ""
+                    } ft`
+                  : null
+              }
+            />
+            <DetailRow
+              label="Properties"
+              value={
+                item.weaponProperties && item.weaponProperties.length > 0
+                  ? item.weaponProperties
+                      .map((p) => p.replace("_", " ").toLowerCase())
+                      .join(", ")
+                  : null
+              }
+            />
+          </>
+        )}
+
+        {item.type === "ARMOR" && (
+          <>
+            <DetailRow
+              label="Category"
+              value={
+                item.armorCategory ? ARMOR_CATEGORIES[item.armorCategory] : null
+              }
+            />
+            <DetailRow
+              label="Base AC"
+              value={
+                item.baseArmorClass != null
+                  ? `${item.baseArmorClass}${
+                      item.addDexToArmorClass
+                        ? ` + Dex${
+                            item.maxDexBonus != null
+                              ? ` (max ${item.maxDexBonus})`
+                              : ""
+                          }`
+                        : ""
+                    }`
+                  : null
+              }
+            />
+            <DetailRow label="Str req" value={item.strengthRequirement} />
+            <DetailRow
+              label="Stealth"
+              value={item.stealthDisadvantage ? "Disadvantage" : null}
+            />
+          </>
+        )}
+      </DetailBody>
+      <DetailText text={item.description} />
+    </>
   );
 }
 

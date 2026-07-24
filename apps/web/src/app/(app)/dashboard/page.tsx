@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CreateCampaignDialog } from "./create-campaign-dialog";
+import { JoinCampaignDialog } from "./join-campaign-dialog";
 import { LogoutButton } from "./logout-button";
 
 export default async function DashboardPage() {
@@ -83,7 +84,8 @@ export default async function DashboardPage() {
                 ? "You are not in any campaigns yet."
                 : `${me.memberships.length} membership(s), ${dmOf.length} as Dungeon Master.`}
             </CardDescription>
-            <CardAction>
+            <CardAction className="flex gap-2">
+              <JoinCampaignDialog />
               <CreateCampaignDialog />
             </CardAction>
           </CardHeader>

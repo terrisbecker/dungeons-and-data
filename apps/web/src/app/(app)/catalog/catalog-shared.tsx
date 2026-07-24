@@ -7,6 +7,11 @@ import { ChevronLeftIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // --- Fetch helpers ---------------------------------------------------------
 
@@ -55,6 +60,66 @@ async function send(
   }
 }
 
+// --- Detail popover layout -------------------------------------------------
+
+// Shared building blocks for the per-type detail popovers so items/spells/feats/
+// features render with one consistent look.
+
+export function DetailHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <div className="mb-2">
+      <p className="text-sm leading-tight font-medium">{title}</p>
+      {subtitle ? (
+        <p className="text-muted-foreground text-xs">{subtitle}</p>
+      ) : null}
+    </div>
+  );
+}
+
+// A label/value line; renders nothing when the value is empty so callers can
+// list every possible field without guarding each one.
+export function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === false
+  ) {
+    return null;
+  }
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="min-w-0 text-right break-words">{value}</span>
+    </div>
+  );
+}
+
+export function DetailBody({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1">{children}</div>;
+}
+
+export function DetailText({ text }: { text?: string | null }) {
+  if (!text) return null;
+  return (
+    <p className="text-muted-foreground mt-2 border-t pt-2 whitespace-pre-wrap">
+      {text}
+    </p>
+  );
+}
+
 // --- Form action buttons ---------------------------------------------------
 
 export function FormActions({
@@ -91,6 +156,7 @@ export function CatalogManager<TRow extends { id: string }>({
   emptyText,
   renderRow,
   renderForm,
+  renderDetail,
 }: {
   topic: string;
   title: string;
@@ -102,11 +168,14 @@ export function CatalogManager<TRow extends { id: string }>({
     editing: TRow | null;
     close: () => void;
   }) => React.ReactNode;
+  renderDetail?: (row: TRow) => React.ReactNode;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step delete: first click arms the row (Confirm/Cancel), second confirms.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const editing = rows.find((r) => r.id === editingId) ?? null;
   const formOpen = adding || editing !== null;
@@ -116,10 +185,16 @@ export function CatalogManager<TRow extends { id: string }>({
     setEditingId(null);
   }
 
+  function openForm(next: () => void) {
+    setConfirmingId(null);
+    next();
+  }
+
   async function onDelete(id: string) {
     setDeletingId(id);
     const ok = await deleteCatalog(topic, id);
     setDeletingId(null);
+    setConfirmingId(null);
     if (ok) {
       toast.success(`${singular} deleted`);
       router.refresh();
@@ -147,10 +222,12 @@ export function CatalogManager<TRow extends { id: string }>({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                setEditingId(null);
-                setAdding((a) => !a);
-              }}
+              onClick={() =>
+                openForm(() => {
+                  setEditingId(null);
+                  setAdding((a) => !a);
+                })
+              }
             >
               <PlusIcon />
               Add {singular}
@@ -176,26 +253,61 @@ export function CatalogManager<TRow extends { id: string }>({
                   key={row.id}
                   className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
                 >
-                  <div className="min-w-0">{renderRow(row)}</div>
+                  <div className="min-w-0">
+                    {renderDetail ? (
+                      <Popover>
+                        <PopoverTrigger className="hover:bg-muted/50 -mx-1 block w-full min-w-0 cursor-pointer rounded px-1 text-left">
+                          {renderRow(row)}
+                        </PopoverTrigger>
+                        <PopoverContent>{renderDetail(row)}</PopoverContent>
+                      </Popover>
+                    ) : (
+                      renderRow(row)
+                    )}
+                  </div>
                   <div className="flex shrink-0 gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setAdding(false);
-                        setEditingId(row.id);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={deletingId === row.id}
-                      onClick={() => onDelete(row.id)}
-                    >
-                      Delete
-                    </Button>
+                    {confirmingId === row.id ? (
+                      <>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={deletingId === row.id}
+                          onClick={() => onDelete(row.id)}
+                        >
+                          {deletingId === row.id ? "Deleting…" : "Confirm"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={deletingId === row.id}
+                          onClick={() => setConfirmingId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            openForm(() => {
+                              setAdding(false);
+                              setEditingId(row.id);
+                            })
+                          }
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfirmingId(row.id)}
+                        >
+                          Delete
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </li>
               ))}

@@ -847,7 +847,9 @@ model CharacterSpell {
   characterId String          @db.Uuid
   spellId     String          @db.Uuid
   character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  spell       Spell           @relation(fields: [spellId], references: [id], onDelete: Cascade)
+  // Restrict: a catalog Spell can't be deleted while any character references
+  // it (blocks the delete instead of silently stripping it from characters).
+  spell       Spell           @relation(fields: [spellId], references: [id], onDelete: Restrict)
 
   known          Boolean @default(true)
   prepared       Boolean @default(false)
@@ -877,7 +879,8 @@ model CharacterFeat {
   characterId String          @db.Uuid
   featId      String          @db.Uuid
   character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  feat        Feat            @relation(fields: [featId], references: [id], onDelete: Cascade)
+  // Restrict: a catalog Feat can't be deleted while any character references it.
+  feat        Feat            @relation(fields: [featId], references: [id], onDelete: Restrict)
 
   @@id([characterId, featId])
 }
@@ -903,7 +906,8 @@ model CharacterFeature {
   characterId String          @db.Uuid
   featureId   String          @db.Uuid
   character   PlayerCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  feature     Feature         @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  // Restrict: a catalog Feature can't be deleted while any character references it.
+  feature     Feature         @relation(fields: [featureId], references: [id], onDelete: Restrict)
 
   notes String? // per-character detail, e.g. a chosen option
 
