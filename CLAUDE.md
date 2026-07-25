@@ -62,17 +62,18 @@ Backend-only workspace scripts (`build`/`start`/`lint:fix`) run with
 `@check`): from `apps/api/`, `npx prisma migrate dev --name <name> --create-only`,
 hand-edit the generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
-## Current state (as of 2026-07-23)
+## Current state (as of 2026-07-24)
 
 Data model complete; the full backend layered stack for **all
 PlayerCharacter-related data** and **all Creature (NPC/Monster) + Location data**
 is implemented, plus a **JWT auth + role-based authorization** layer and the
 `Player`/`Campaign`/`CampaignMembership` CRUD that backs it. The repo is now a
-**full-stack npm-workspaces monorepo**: the backend moved under `apps/api/`, a
-Next.js frontend (`apps/web/`) delivers the **auth slice** (register/login/
-logout + a dashboard reading `/auth/me`) via a BFF with an httpOnly-cookie
-session, and `packages/shared` holds the type-only API contract. Working on
-branch `feat/auth`.
+**full-stack npm-workspaces monorepo**: the backend lives under `apps/api/`, a
+Next.js frontend (`apps/web/`) now covers the **auth slice, a dashboard, and
+campaign + character management** (character creation and an interactive
+character sheet), and `packages/shared` holds the type-only API contract.
+Everything reaches the API through a BFF with an httpOnly-cookie session.
+Working on branch `frontend/character-creation-wizard`.
 
 **Implemented:**
 
@@ -196,6 +197,51 @@ branch `feat/auth`.
   NPCs (the three monsters stay shared/null-campaign) so every authorization path
   is exercisable. `docs/character-sheet.md` and `docs/creature-stat-block.md`
   document the character-sheet and creature stat-block curls.
+- **Frontend (`apps/web`)** — a Next.js App-Router UI over the API via the BFF
+  (full details in `docs/frontend.md`). The browser only ever calls Next; each
+  Server Component / Route Handler attaches the JWT from the httpOnly `session`
+  cookie (`src/lib/api.ts` `serverFetch` + typed helpers), so the token never
+  reaches the browser, and `src/proxy.ts` gates authed routes on the cookie.
+  - **Auth** (`(auth)/`): register / login forms POST to Next Route Handlers
+    (`api/auth/{login,register,logout}`) that set/clear the cookie.
+  - **Dashboard** (`(app)/dashboard`): reads `/auth/me` + the player's
+    characters; lists campaign memberships and characters, with a
+    **create-campaign** dialog and a **New character** link.
+  - **Campaign workspace** (`(app)/campaigns/[id]`): a sidebar-shell scaffold
+    (the nav items are still placeholders).
+  - **Character creation** (`(app)/characters/new`): a wizard that captures
+    **only the main `PlayerCharacter` row** — Identity → Abilities → Combat →
+    Roleplay → Review. It deliberately does **not** collect satellite-table data;
+    those are added afterward from the sheet.
+  - **Character sheet** (`(app)/characters/[id]`): renders
+    `GET /characters/:id/sheet`. `character-sheet.tsx` stays a **server
+    component** and composes client sections; every mutation goes through the
+    BFF and then `router.refresh()` (server re-fetch, single source of truth —
+    including the recomputed `derived` block). Three kinds of interaction:
+    - **Add / remove** — each of classes, skills, spell slots, resources,
+      proficiencies, conditions, inventory, spells, feats, and features has an
+      inline, in-card **Add** form (expand/collapse, no modal) and per-row
+      **remove**. The catalog-backed ones lazy-load their catalog on first open.
+    - **Live tracking + inline editing** — spell slots and resource pools are
+      **clickable boxes** (a stepper past 12), death saves are tick boxes, and
+      every non-calculated scalar on the main row (HP/AC, ability scores,
+      speeds, senses, coin, XP, inspiration, save proficiencies, the roleplay
+      boxes) is edited in place: click the value, Enter/blur saves, Escape
+      reverts. Backed by `src/hooks/use-optimistic-field.ts`, which renders a
+      draft immediately and serializes+coalesces writes per field. Derived
+      values stay read-only. See `docs/frontend.md`.
+    - **Detail popovers** — catalog-backed rows and conditions open a
+      click-to-open popover; the renderers in `src/components/catalog-detail.tsx`
+      are shared with the `/catalog` browsers, which works because the sheet
+      select joins the _full_ catalog projections.
+  - **BFF Route Handlers** (`src/app/api/*`): `campaigns` (POST); `characters`
+    (POST — orchestrates the parent create + owned children with a best-effort
+    rollback, injecting `playerId` server-side; `[id]` PATCH for the sheet's
+    inline edits of the main row); `character-children/[topic]` (POST +
+    `[id]` PATCH/DELETE + `[id]/[otherId]` DELETE — an **allowlisted** proxy to
+    the owned-child API endpoints the sheet uses); and `catalog/[topic]`
+    (GET/POST + `[id]` PATCH/DELETE). The API's own guards enforce ownership on
+    every one.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -210,6 +256,26 @@ branch `feat/auth`.
 - No pagination. Auth is JWT-only (no refresh tokens, no revocation/blocklist —
   a token stays valid until it expires even if the account is later demoted).
 - No tests, no CI.
+- **Catalog in-use delete messaging:** deleting a catalog row that is still
+  referenced (an `Item` in an inventory, or a `Spell`/`Feat`/`Feature` on a
+  character) is correctly refused at the DB level (`onDelete: Restrict` → Prisma
+  `P2003`), but `mapPrismaError` turns that into a generic `400 Bad Request` with
+  no context. Improve this to a descriptive response (e.g. a `409` naming how
+  many inventories/characters still reference the row) so the UI toast is useful.
+- **Frontend gaps:** `characterName` and `race` still can't be changed from the
+  sheet — the API accepts them only on create (`requireString`; they are absent
+  from `parseOptionalFields`), so renaming needs an API change first. No
+  deleting a character or editing the campaign roster from the UI; the sheet's
+  catalog **join** rows are add/remove only (no editing `prepared` on a spell or
+  `notes` on a feature — that needs PATCH on the `[id]/[otherId]` BFF route,
+  excluding `character-feats`, which is a pure join with no API PATCH); the
+  campaign-workspace sidebar nav is a non-functional placeholder; and
+  Creature/Location data has no frontend yet.
+- **Sheet write semantics:** slot/resource writes send an absolute value, so two
+  people spending the same slot is last-write-wins (atomic `{ increment }` would
+  need a new API contract). `PATCH /characters/:id` bounds `currentHitPoints`
+  only at `≥ 0` while create caps it at `maxHitPoints + temporaryHitPoints`; the
+  UI enforces the create rule, so the cap is client-side only.
 
 ## Architecture — layered backend
 

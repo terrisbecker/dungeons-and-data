@@ -35,3 +35,7 @@ export function updateFeature(
 export function deleteFeature(id: string) {
   return prisma.feature.delete({ where: { id } });
 }
+
+// The character sheet joins the same projection so a feature row on the sheet
+// is the full catalog shape (see characters.queries.ts).
+export { select as featureCatalogSelect };

@@ -1,5 +1,5 @@
 import { CampaignStatus, Prisma } from "@prisma/client";
-import { notFound } from "../http/http-error.js";
+import { conflict, notFound } from "../http/http-error.js";
 import { mapPrismaError } from "../http/prisma-errors.js";
 import {
   asRecord,
@@ -12,6 +12,7 @@ import {
   deleteCampaign,
   findCampaignById,
   findCampaigns,
+  joinCampaignAsPlayer,
   updateCampaign,
 } from "./campaigns.queries.js";
 
@@ -46,6 +47,32 @@ export async function getCampaignService(id: string) {
   const row = await findCampaignById(id);
   if (!row) throw notFound();
   return row;
+}
+
+// Self-service join: seat the current player as a PLAYER in the campaign. The
+// playerId comes from the caller's token (not the body), so a user can only ever
+// add themselves — hence no DM/Admin guard on the route.
+export async function joinCampaignService(
+  campaignId: string,
+  playerId: string,
+) {
+  // Resolve the pasted id to a real campaign first so a bad/unknown id is a
+  // clear 404 rather than a generic foreign-key 400.
+  const campaign = await findCampaignById(campaignId);
+  if (!campaign) throw notFound();
+
+  try {
+    return await joinCampaignAsPlayer(campaignId, playerId);
+  } catch (error) {
+    // Unique (campaign, player) violation -> already a member.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw conflict("You are already a member of this campaign.");
+    }
+    mapPrismaError(error);
+  }
 }
 
 export async function updateCampaignService(id: string, rawBody: unknown) {

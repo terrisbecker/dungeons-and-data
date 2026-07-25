@@ -5,6 +5,7 @@ import {
   createCampaignService,
   deleteCampaignService,
   getCampaignService,
+  joinCampaignService,
   listCampaignsService,
   updateCampaignService,
 } from "./campaigns.service.js";
@@ -26,6 +27,17 @@ export async function getCampaigns(
 
 export async function getCampaign(req: Request, res: Response): Promise<void> {
   res.json(await getCampaignService(requireUuid(req.params.id)));
+}
+
+export async function joinCampaign(req: Request, res: Response): Promise<void> {
+  // requireAuth guarantees req.auth; the check keeps the type honest and ensures
+  // the seat is created for the caller, never an id supplied in the request.
+  if (!req.auth) throw unauthorized();
+  res
+    .status(201)
+    .json(
+      await joinCampaignService(requireUuid(req.params.id), req.auth.playerId),
+    );
 }
 
 export async function patchCampaign(

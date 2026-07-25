@@ -1,42 +1,25 @@
-import Link from "next/link";
-import { ChevronLeftIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { redirect } from "next/navigation";
+import type { MeResponse } from "@dnd/shared";
+import { ApiRequestError, getMe } from "@/lib/api";
+import { CharacterWizard } from "./character-wizard";
 
-// Placeholder for the character-creator wizard, which is a follow-up step.
-export default function NewCharacterPage() {
-  return (
-    <main className="mx-auto w-full max-w-2xl flex-1 p-6">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link href="/dashboard" />}
-        >
-          <ChevronLeftIcon />
-          Back to dashboard
-        </Button>
-      </div>
+export default async function NewCharacterPage() {
+  let me: MeResponse;
+  try {
+    me = await getMe();
+  } catch (error) {
+    // Token missing/expired at the API — clear it and bounce to login (a plain
+    // redirect would loop against the proxy, which still sees the cookie).
+    if (error instanceof ApiRequestError && error.status === 401) {
+      redirect("/api/auth/logout");
+    }
+    throw error;
+  }
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create a character</CardTitle>
-          <CardDescription>Character creator coming soon.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            The character-creator wizard is on its way. Check back shortly to
-            build your next hero.
-          </p>
-        </CardContent>
-      </Card>
-    </main>
-  );
+  const campaigns = me.memberships.map((m) => ({
+    id: m.campaign.id,
+    name: m.campaign.name,
+  }));
+
+  return <CharacterWizard campaigns={campaigns} />;
 }

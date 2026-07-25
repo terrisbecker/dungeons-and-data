@@ -58,3 +58,7 @@ export function updateItem(id: string, data: Prisma.ItemUpdateInput) {
 export function deleteItem(id: string) {
   return prisma.item.delete({ where: { id } });
 }
+
+// The character sheet joins the same projection (satellites included) so an
+// inventory row's item is the full catalog shape (see characters.queries.ts).
+export { select as itemCatalogSelect };

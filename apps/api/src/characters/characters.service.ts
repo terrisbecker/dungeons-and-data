@@ -3,6 +3,8 @@ import { notFound } from "../http/http-error.js";
 import { mapPrismaError } from "../http/prisma-errors.js";
 import {
   asRecord,
+  nullableInt,
+  nullableString,
   optionalBoolean,
   optionalEnum,
   optionalInt,
@@ -10,6 +12,7 @@ import {
   requireInt,
   requireString,
 } from "../http/validate.js";
+import { flattenItem } from "../items/items.service.js";
 import {
   computeDerived,
   type DerivedInput,
@@ -31,7 +34,10 @@ const ABILITY_MIN = 1;
 const ABILITY_MAX = 30;
 
 // Fields that can be set on both create and update. Returns only the keys the
-// caller actually provided so PATCH stays partial.
+// caller actually provided so PATCH stays partial. Nullable columns the sheet
+// can empty (the extra speeds, darkvision, subrace, the roleplay boxes) go
+// through the nullable* parsers so an explicit `null` clears them; the rest use
+// optional*, where `null` is indistinguishable from an absent key.
 function parseOptionalFields(
   body: Record<string, unknown>,
 ): Partial<Prisma.PlayerCharacterUncheckedCreateInput> {
@@ -43,7 +49,7 @@ function parseOptionalFields(
     }
   };
 
-  set("subrace", optionalString(body, "subrace"));
+  set("subrace", nullableString(body, "subrace"));
   set("alignment", optionalEnum(body, "alignment", ALIGNMENTS));
   set("size", optionalEnum(body, "size", SIZES));
   set("experiencePoints", optionalInt(body, "experiencePoints", { min: 0 }));
@@ -71,10 +77,10 @@ function parseOptionalFields(
   );
 
   set("speed", optionalInt(body, "speed", { min: 0 }));
-  set("flySpeed", optionalInt(body, "flySpeed", { min: 0 }));
-  set("swimSpeed", optionalInt(body, "swimSpeed", { min: 0 }));
-  set("climbSpeed", optionalInt(body, "climbSpeed", { min: 0 }));
-  set("darkvision", optionalInt(body, "darkvision", { min: 0 }));
+  set("flySpeed", nullableInt(body, "flySpeed", { min: 0 }));
+  set("swimSpeed", nullableInt(body, "swimSpeed", { min: 0 }));
+  set("climbSpeed", nullableInt(body, "climbSpeed", { min: 0 }));
+  set("darkvision", nullableInt(body, "darkvision", { min: 0 }));
   set("concentratingOnSpellId", optionalString(body, "concentratingOnSpellId"));
 
   set("copper", optionalInt(body, "copper", { min: 0 }));
@@ -83,12 +89,12 @@ function parseOptionalFields(
   set("gold", optionalInt(body, "gold", { min: 0 }));
   set("platinum", optionalInt(body, "platinum", { min: 0 }));
 
-  set("description", optionalString(body, "description"));
-  set("background", optionalString(body, "background"));
-  set("traits", optionalString(body, "traits"));
-  set("ideals", optionalString(body, "ideals"));
-  set("bonds", optionalString(body, "bonds"));
-  set("flaws", optionalString(body, "flaws"));
+  set("description", nullableString(body, "description"));
+  set("background", nullableString(body, "background"));
+  set("traits", nullableString(body, "traits"));
+  set("ideals", nullableString(body, "ideals"));
+  set("bonds", nullableString(body, "bonds"));
+  set("flaws", nullableString(body, "flaws"));
   set("playerId", optionalString(body, "playerId"));
   set("campaignId", optionalString(body, "campaignId"));
 
@@ -151,7 +157,15 @@ export async function getCharacterSheetService(id: string) {
   if (!character) {
     throw notFound();
   }
-  return withDerived(character);
+  // The joined item rows carry the 1:1 weapon/armor satellites; fold them in so
+  // `inventory[].item` is the same flat shape GET /items returns.
+  return withDerived({
+    ...character,
+    inventory: character.inventory.map((row) => ({
+      ...row,
+      item: flattenItem(row.item),
+    })),
+  });
 }
 
 export async function updateCharacterService(id: string, rawBody: unknown) {

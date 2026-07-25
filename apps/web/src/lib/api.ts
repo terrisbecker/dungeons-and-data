@@ -2,8 +2,14 @@ import type {
   ApiError,
   AuthResponse,
   Campaign,
+  CampaignRole,
+  CharacterSheet,
   CharacterSummary,
+  FeatCatalog,
+  FeatureCatalog,
+  ItemCatalog,
   MeResponse,
+  SpellCatalog,
 } from "@dnd/shared";
 import { getToken } from "./session";
 
@@ -71,11 +77,84 @@ export function getCampaign(id: string): Promise<Campaign> {
   return serverFetch<Campaign>(`/campaigns/${id}`);
 }
 
+// Join a campaign as a PLAYER by its id (POST /campaigns/:id/join). The API
+// seats the caller (from the token) — the id is only used to find the campaign.
+// Returns the created membership row (the lean shape the API create returns).
+export function joinCampaign(id: string): Promise<{
+  id: string;
+  campaignId: string;
+  playerId: string;
+  role: CampaignRole;
+  joinedAt: string;
+}> {
+  return serverFetch(`/campaigns/${encodeURIComponent(id)}/join`, {
+    method: "POST",
+  });
+}
+
 // A player's own characters (GET /characters?playerId=…).
 export function getMyCharacters(playerId: string): Promise<CharacterSummary[]> {
   return serverFetch<CharacterSummary[]>(
     `/characters?playerId=${encodeURIComponent(playerId)}`,
   );
+}
+
+// The full virtual character sheet (GET /characters/:id/sheet).
+export function getCharacterSheet(id: string): Promise<CharacterSheet> {
+  return serverFetch<CharacterSheet>(
+    `/characters/${encodeURIComponent(id)}/sheet`,
+  );
+}
+
+// Create a character (POST /characters). Returns the created row (incl. its id).
+export function createCharacter(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/characters", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// Attach a class to a character (POST /character-classes).
+export function createCharacterClass(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/character-classes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// Attach a skill proficiency to a character (POST /character-skills).
+export function createCharacterSkill(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/character-skills", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+// Soft-delete a character (DELETE /characters/:id). Used to roll back a partial
+// creation when a child-row step fails.
+export function deleteCharacter(id: string): Promise<void> {
+  return serverFetch<void>(`/characters/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// Shared catalogs (GET /items, /spells, /feats, /features). Readable by any
+// authed user; the catalog pages use these server-side, while the sheet pickers
+// fetch /api/catalog/[topic] from the client.
+export function listItems(): Promise<ItemCatalog[]> {
+  return serverFetch<ItemCatalog[]>("/items");
+}
+
+export function listSpells(): Promise<SpellCatalog[]> {
+  return serverFetch<SpellCatalog[]>("/spells");
+}
+
+export function listFeats(): Promise<FeatCatalog[]> {
+  return serverFetch<FeatCatalog[]>("/feats");
+}
+
+export function listFeatures(): Promise<FeatureCatalog[]> {
+  return serverFetch<FeatureCatalog[]>("/features");
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.
