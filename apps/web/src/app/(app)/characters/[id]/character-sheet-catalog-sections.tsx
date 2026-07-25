@@ -13,40 +13,62 @@ import type {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { EnumSelect, Field } from "@/components/form-fields";
+import {
+  DetailBody,
+  DetailRow,
+  FEATURE_SOURCES,
+  FeatDetail,
+  FeatureDetail,
+  ItemDetail,
+  SpellDetail,
+} from "@/components/catalog-detail";
+import {
+  deleteChild,
+  deleteJoin,
+  postChild,
+} from "./character-sheet-mutations";
 import {
   EmptyState,
   FormButtons,
   RemoveButton,
   SectionCard,
-  deleteChild,
-  postChild,
 } from "./character-sheet-sections";
 
 // --- Shared helpers --------------------------------------------------------
 
-// Composite-key detach for the spell/feat/feature joins (characterId + catalog
-// id). Inventory items use the single-id deleteChild() instead.
-async function deleteJoin(
-  topic: string,
-  characterId: string,
-  otherId: string,
-): Promise<boolean> {
-  try {
-    const res = await fetch(
-      `/api/character-children/${topic}/${characterId}/${otherId}`,
-      { method: "DELETE" },
-    );
-    if (!res.ok) {
-      const parsed = await res.json().catch(() => null);
-      toast.error(parsed?.error ?? "Could not remove entry");
-      return false;
-    }
-    return true;
-  } catch {
-    toast.error("Could not reach the server");
-    return false;
-  }
+// Click-to-open detail for a catalog-backed row. Only the label is the trigger,
+// so the row's Remove button doesn't end up nested inside a button. Wider than
+// the primitive's default because item and spell descriptions are long.
+function RowDetail({
+  label,
+  children,
+}: {
+  label: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="hover:bg-muted/60 focus-visible:ring-ring/50 -mx-1 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none"
+          />
+        }
+      >
+        {label}
+      </PopoverTrigger>
+      <PopoverContent className="max-h-[65vh] w-96 overflow-y-auto">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // Lazy-loads a catalog the first time a section opens, so viewing a sheet
@@ -264,23 +286,46 @@ export function InventorySection({
               key={row.id}
               className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
             >
-              <span>
-                {row.item.name}
-                {row.quantity > 1 && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    ×{row.quantity}
-                  </span>
-                )}
-                <span className="text-muted-foreground ml-1 text-xs">
-                  {[
-                    row.equipped ? "equipped" : null,
-                    row.attuned ? "attuned" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </span>
+              <RowDetail
+                label={
+                  <>
+                    {row.item.name}
+                    {row.quantity > 1 && (
+                      <span className="text-muted-foreground">
+                        {" "}
+                        ×{row.quantity}
+                      </span>
+                    )}
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      {[
+                        row.equipped ? "equipped" : null,
+                        row.attuned ? "attuned" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </>
+                }
+              >
+                <ItemDetail item={row.item} />
+                <DetailBody>
+                  <DetailRow label="Quantity" value={row.quantity} />
+                  <DetailRow
+                    label="Equipped"
+                    value={row.equipped ? "Yes" : null}
+                  />
+                  <DetailRow
+                    label="Attuned"
+                    value={
+                      row.attuned
+                        ? "Yes"
+                        : row.item.requiresAttunement
+                          ? "Not attuned"
+                          : null
+                    }
+                  />
+                </DetailBody>
+              </RowDetail>
               <RemoveButton onRemove={() => onRemove(row.id)} />
             </li>
           ))}
@@ -429,13 +474,33 @@ export function SpellsSection({
               key={s.spell.id}
               className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
             >
-              <span>
-                {s.spell.name}
-                <span className="text-muted-foreground ml-1 text-xs">
-                  {s.spell.level === 0 ? "Cantrip" : `Lvl ${s.spell.level}`}
-                  {s.prepared ? " · prepared" : ""}
-                </span>
-              </span>
+              <RowDetail
+                label={
+                  <>
+                    {s.spell.name}
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      {s.spell.level === 0 ? "Cantrip" : `Lvl ${s.spell.level}`}
+                      {s.prepared ? " · prepared" : ""}
+                    </span>
+                  </>
+                }
+              >
+                <SpellDetail spell={s.spell} />
+                <DetailBody>
+                  <DetailRow label="Known" value={s.known ? "Yes" : null} />
+                  <DetailRow
+                    label="Prepared"
+                    value={
+                      s.alwaysPrepared
+                        ? "Always prepared"
+                        : s.prepared
+                          ? "Yes"
+                          : null
+                    }
+                  />
+                  <DetailRow label="From" value={s.sourceClass} />
+                </DetailBody>
+              </RowDetail>
               <RemoveButton onRemove={() => onRemove(s.spell.id)} />
             </li>
           ))}
@@ -541,15 +606,22 @@ export function FeatsSection({
               key={f.feat.id}
               className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
             >
-              <span>
-                <span className="font-medium">{f.feat.name}</span>
-                {f.feat.description && (
-                  <span className="text-muted-foreground">
-                    {" "}
-                    — {f.feat.description}
-                  </span>
-                )}
-              </span>
+              {/* The description lives in the popover now, so the row stays a
+                  single line however long the feat's rules text is. */}
+              <RowDetail
+                label={
+                  <>
+                    <span className="font-medium">{f.feat.name}</span>
+                    {f.feat.prerequisite && (
+                      <span className="text-muted-foreground ml-1 text-xs">
+                        {f.feat.prerequisite}
+                      </span>
+                    )}
+                  </>
+                }
+              >
+                <FeatDetail feat={f.feat} />
+              </RowDetail>
               <RemoveButton onRemove={() => onRemove(f.feat.id)} />
             </li>
           ))}
@@ -677,12 +749,21 @@ export function FeaturesSection({
               key={f.feature.id}
               className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
             >
-              <span>
-                {f.feature.name}
-                <span className="text-muted-foreground ml-1 text-xs">
-                  {f.feature.source}
-                </span>
-              </span>
+              <RowDetail
+                label={
+                  <>
+                    {f.feature.name}
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      {FEATURE_SOURCES[f.feature.source]}
+                    </span>
+                  </>
+                }
+              >
+                <FeatureDetail feature={f.feature} />
+                <DetailBody>
+                  <DetailRow label="Notes" value={f.notes} />
+                </DetailBody>
+              </RowDetail>
               <RemoveButton onRemove={() => onRemove(f.feature.id)} />
             </li>
           ))}

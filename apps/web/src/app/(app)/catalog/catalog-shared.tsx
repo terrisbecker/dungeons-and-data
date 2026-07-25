@@ -60,65 +60,8 @@ async function send(
   }
 }
 
-// --- Detail popover layout -------------------------------------------------
-
-// Shared building blocks for the per-type detail popovers so items/spells/feats/
-// features render with one consistent look.
-
-export function DetailHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="mb-2">
-      <p className="text-sm leading-tight font-medium">{title}</p>
-      {subtitle ? (
-        <p className="text-muted-foreground text-xs">{subtitle}</p>
-      ) : null}
-    </div>
-  );
-}
-
-// A label/value line; renders nothing when the value is empty so callers can
-// list every possible field without guarding each one.
-export function DetailRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
-  if (
-    value === null ||
-    value === undefined ||
-    value === "" ||
-    value === false
-  ) {
-    return null;
-  }
-  return (
-    <div className="flex justify-between gap-3">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="min-w-0 text-right break-words">{value}</span>
-    </div>
-  );
-}
-
-export function DetailBody({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col gap-1">{children}</div>;
-}
-
-export function DetailText({ text }: { text?: string | null }) {
-  if (!text) return null;
-  return (
-    <p className="text-muted-foreground mt-2 border-t pt-2 whitespace-pre-wrap">
-      {text}
-    </p>
-  );
-}
+// The detail-popover building blocks and the four per-catalog detail bodies now
+// live in @/components/catalog-detail, shared with the character sheet.
 
 // --- Form action buttons ---------------------------------------------------
 

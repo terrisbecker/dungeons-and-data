@@ -29,3 +29,7 @@ export function updateFeat(id: string, data: Prisma.FeatUncheckedUpdateInput) {
 export function deleteFeat(id: string) {
   return prisma.feat.delete({ where: { id } });
 }
+
+// The character sheet joins the same projection so a feat row on the sheet is
+// the full catalog shape (see characters.queries.ts).
+export { select as featCatalogSelect };

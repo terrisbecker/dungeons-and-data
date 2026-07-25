@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { featCatalogSelect } from "../feats/feats.queries.js";
+import { featureCatalogSelect } from "../features/features.queries.js";
+import { itemCatalogSelect } from "../items/items.queries.js";
+import { spellCatalogSelect } from "../spells/spells.queries.js";
 
 // Explicit column selection so responses never leak columns we didn't intend.
 // The full set of stored PlayerCharacter scalars, reused across reads.
@@ -90,8 +94,11 @@ const characterCoreSelect = {
 } satisfies Prisma.PlayerCharacterSelect;
 
 // Full "virtual character sheet": core plus every other owned/related table.
-// Explicitly opted into via GET /characters/:id/sheet so the common read above
-// stays lean.
+// Explicitly opted into via GET /characters/:id/sheet; the core read above is
+// the lean one. The joined catalog rows reuse the very selects the catalog
+// endpoints return, so the sheet can render an item/spell/feat/feature detail
+// view without a second request (and the shared types reuse ItemCatalog,
+// SpellCatalog, …).
 const characterSheetSelect = {
   ...characterCoreSelect,
   spellSlots: {
@@ -122,20 +129,18 @@ const characterSheetSelect = {
       prepared: true,
       alwaysPrepared: true,
       sourceClass: true,
-      spell: {
-        select: { id: true, name: true, level: true, school: true },
-      },
+      spell: { select: spellCatalogSelect },
     },
   },
   feats: {
     select: {
-      feat: { select: { id: true, name: true, description: true } },
+      feat: { select: featCatalogSelect },
     },
   },
   features: {
     select: {
       notes: true,
-      feature: { select: { id: true, name: true, source: true } },
+      feature: { select: featureCatalogSelect },
     },
   },
   inventory: {
@@ -145,15 +150,7 @@ const characterSheetSelect = {
       quantity: true,
       equipped: true,
       attuned: true,
-      item: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          rarity: true,
-          requiresAttunement: true,
-        },
-      },
+      item: { select: itemCatalogSelect },
     },
   },
 } satisfies Prisma.PlayerCharacterSelect;

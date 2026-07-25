@@ -36,6 +36,22 @@ export function optionalString(
   return value;
 }
 
+// Like optionalString, but an explicit `null` means "clear this column" while
+// an absent key still means "leave it alone" — the distinction optionalString
+// throws away. Use it for nullable columns that PATCH must be able to empty.
+export function nullableString(
+  obj: Record<string, unknown>,
+  key: string,
+): string | null | undefined {
+  if (obj[key] === undefined) {
+    return undefined;
+  }
+  if (obj[key] === null) {
+    return null;
+  }
+  return requireString(obj, key);
+}
+
 export function requireInt(
   obj: Record<string, unknown>,
   key: string,
@@ -61,6 +77,21 @@ export function optionalInt(
 ): number | undefined {
   if (obj[key] === undefined || obj[key] === null) {
     return undefined;
+  }
+  return requireInt(obj, key, bounds);
+}
+
+// The optionalInt counterpart of nullableString: `null` clears the column.
+export function nullableInt(
+  obj: Record<string, unknown>,
+  key: string,
+  bounds: { min?: number; max?: number } = {},
+): number | null | undefined {
+  if (obj[key] === undefined) {
+    return undefined;
+  }
+  if (obj[key] === null) {
+    return null;
   }
   return requireInt(obj, key, bounds);
 }

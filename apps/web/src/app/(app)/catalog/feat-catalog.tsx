@@ -7,12 +7,9 @@ import type { CreateFeatInput, FeatCatalog } from "@dnd/shared";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/form-fields";
+import { FeatDetail } from "@/components/catalog-detail";
 import {
   CatalogManager,
-  DetailBody,
-  DetailHeader,
-  DetailRow,
-  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
@@ -45,27 +42,7 @@ export function FeatCatalogManager({ rows }: { rows: FeatCatalog[] }) {
       renderForm={({ editing, close }) => (
         <FeatForm key={editing?.id ?? "new"} editing={editing} close={close} />
       )}
-      renderDetail={(feat) => (
-        <>
-          <DetailHeader title={feat.name} />
-          <DetailBody>
-            <DetailRow label="Prerequisite" value={feat.prerequisite} />
-            <DetailRow
-              label="Repeatable"
-              value={feat.repeatable ? "Yes" : null}
-            />
-            <DetailRow
-              label="Half-feat"
-              value={
-                feat.grantsAbilityScoreIncrease
-                  ? "Grants +1 ability score"
-                  : null
-              }
-            />
-          </DetailBody>
-          <DetailText text={feat.description} />
-        </>
-      )}
+      renderDetail={(feat) => <FeatDetail feat={feat} />}
     />
   );
 }

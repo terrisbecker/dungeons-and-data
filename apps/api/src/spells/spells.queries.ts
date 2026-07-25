@@ -47,3 +47,7 @@ export function updateSpell(
 export function deleteSpell(id: string) {
   return prisma.spell.delete({ where: { id } });
 }
+
+// The character sheet joins the same projection so a spell row on the sheet is
+// the full catalog shape (see characters.queries.ts).
+export { select as spellCatalogSelect };

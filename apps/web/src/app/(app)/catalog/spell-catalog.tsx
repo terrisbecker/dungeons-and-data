@@ -14,54 +14,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect, Field } from "@/components/form-fields";
 import {
+  DAMAGE_TYPES,
+  SAVE_ABILITIES as ABILITIES,
+  SPELL_SCHOOLS as SCHOOLS,
+  SpellDetail,
+} from "@/components/catalog-detail";
+import {
   CatalogManager,
-  DetailBody,
-  DetailHeader,
-  DetailRow,
-  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
 } from "./catalog-shared";
-
-const SCHOOLS: Record<string, string> = {
-  NONE: "—",
-  ABJURATION: "Abjuration",
-  CONJURATION: "Conjuration",
-  DIVINATION: "Divination",
-  ENCHANTMENT: "Enchantment",
-  EVOCATION: "Evocation",
-  ILLUSION: "Illusion",
-  NECROMANCY: "Necromancy",
-  TRANSMUTATION: "Transmutation",
-};
-
-const ABILITIES: Record<string, string> = {
-  NONE: "None",
-  STR: "Strength",
-  DEX: "Dexterity",
-  CON: "Constitution",
-  INT: "Intelligence",
-  WIS: "Wisdom",
-  CHA: "Charisma",
-};
-
-const DAMAGE_TYPES: Record<string, string> = {
-  NONE: "None",
-  ACID: "Acid",
-  BLUDGEONING: "Bludgeoning",
-  COLD: "Cold",
-  FIRE: "Fire",
-  FORCE: "Force",
-  LIGHTNING: "Lightning",
-  NECROTIC: "Necrotic",
-  PIERCING: "Piercing",
-  POISON: "Poison",
-  PSYCHIC: "Psychic",
-  RADIANT: "Radiant",
-  SLASHING: "Slashing",
-  THUNDER: "Thunder",
-};
 
 export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
   return (
@@ -88,64 +51,6 @@ export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
       )}
       renderDetail={(spell) => <SpellDetail spell={spell} />}
     />
-  );
-}
-
-function SpellDetail({ spell }: { spell: SpellCatalog }) {
-  const components = [
-    spell.verbal ? "V" : null,
-    spell.somatic ? "S" : null,
-    spell.material ? "M" : null,
-  ].filter(Boolean);
-
-  const tags = [
-    spell.concentration ? "Concentration" : null,
-    spell.ritual ? "Ritual" : null,
-  ].filter(Boolean);
-
-  return (
-    <>
-      <DetailHeader
-        title={spell.name}
-        subtitle={`${
-          spell.level === 0 ? "Cantrip" : `Level ${spell.level}`
-        }${spell.school ? ` · ${SCHOOLS[spell.school]}` : ""}`}
-      />
-      <DetailBody>
-        <DetailRow label="Casting time" value={spell.castingTime} />
-        <DetailRow label="Range" value={spell.range} />
-        <DetailRow label="Duration" value={spell.duration} />
-        <DetailRow
-          label="Components"
-          value={
-            components.length > 0
-              ? `${components.join(", ")}${
-                  spell.material && spell.materialComponent
-                    ? ` (${spell.materialComponent})`
-                    : ""
-                }`
-              : null
-          }
-        />
-        <DetailRow
-          label="Save"
-          value={spell.savingThrow ? ABILITIES[spell.savingThrow] : null}
-        />
-        <DetailRow
-          label="Damage"
-          value={spell.damageType ? DAMAGE_TYPES[spell.damageType] : null}
-        />
-        <DetailRow label="Attack roll" value={spell.isAttack ? "Yes" : null} />
-        <DetailRow label="" value={tags.length > 0 ? tags.join(" · ") : null} />
-      </DetailBody>
-      <DetailText text={spell.description} />
-      {spell.higherLevel ? (
-        <p className="mt-2 whitespace-pre-wrap">
-          <span className="font-medium">At higher levels. </span>
-          <span className="text-muted-foreground">{spell.higherLevel}</span>
-        </p>
-      ) : null}
-    </>
   );
 }
 

@@ -214,19 +214,34 @@ Working on branch `frontend/character-creation-wizard`.
     Roleplay → Review. It deliberately does **not** collect satellite-table data;
     those are added afterward from the sheet.
   - **Character sheet** (`(app)/characters/[id]`): renders
-    `GET /characters/:id/sheet`, and its owned-child sections are **interactive**
-    — each of classes, skills, spell slots, resources, proficiencies, and
-    conditions has an inline, in-card **Add** form (expand/collapse, no modal)
-    and per-row **remove**, mutating via the BFF and calling `router.refresh()`
-    (server component re-fetch, single source of truth). Catalog-backed data
-    (inventory items, spells, feats, features) is still **read-only** — a
-    follow-up will add pick-from-catalog forms.
+    `GET /characters/:id/sheet`. `character-sheet.tsx` stays a **server
+    component** and composes client sections; every mutation goes through the
+    BFF and then `router.refresh()` (server re-fetch, single source of truth —
+    including the recomputed `derived` block). Three kinds of interaction:
+    - **Add / remove** — each of classes, skills, spell slots, resources,
+      proficiencies, conditions, inventory, spells, feats, and features has an
+      inline, in-card **Add** form (expand/collapse, no modal) and per-row
+      **remove**. The catalog-backed ones lazy-load their catalog on first open.
+    - **Live tracking + inline editing** — spell slots and resource pools are
+      **clickable boxes** (a stepper past 12), death saves are tick boxes, and
+      every non-calculated scalar on the main row (HP/AC, ability scores,
+      speeds, senses, coin, XP, inspiration, save proficiencies, the roleplay
+      boxes) is edited in place: click the value, Enter/blur saves, Escape
+      reverts. Backed by `src/hooks/use-optimistic-field.ts`, which renders a
+      draft immediately and serializes+coalesces writes per field. Derived
+      values stay read-only. See `docs/frontend.md`.
+    - **Detail popovers** — catalog-backed rows and conditions open a
+      click-to-open popover; the renderers in `src/components/catalog-detail.tsx`
+      are shared with the `/catalog` browsers, which works because the sheet
+      select joins the _full_ catalog projections.
   - **BFF Route Handlers** (`src/app/api/*`): `campaigns` (POST); `characters`
     (POST — orchestrates the parent create + owned children with a best-effort
-    rollback, injecting `playerId` server-side); and `character-children/[topic]`
-    (POST + `[id]` DELETE — an **allowlisted** proxy to the six owned-child API
-    endpoints that the sheet sections use; the API's own guards enforce
-    ownership).
+    rollback, injecting `playerId` server-side; `[id]` PATCH for the sheet's
+    inline edits of the main row); `character-children/[topic]` (POST +
+    `[id]` PATCH/DELETE + `[id]/[otherId]` DELETE — an **allowlisted** proxy to
+    the owned-child API endpoints the sheet uses); and `catalog/[topic]`
+    (GET/POST + `[id]` PATCH/DELETE). The API's own guards enforce ownership on
+    every one.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -247,11 +262,20 @@ Working on branch `frontend/character-creation-wizard`.
   `P2003`), but `mapPrismaError` turns that into a generic `400 Bad Request` with
   no context. Improve this to a descriptive response (e.g. a `409` naming how
   many inventories/characters still reference the row) so the UI toast is useful.
-- **Frontend gaps:** no editing/deleting of the main character row or the
-  campaign roster from the UI; the sheet's catalog-backed sections (inventory
-  items, spells, feats, features) are read-only (pick-from-catalog dialogs are a
-  follow-up); the campaign-workspace sidebar nav is a non-functional placeholder;
-  and Creature/Location data has no frontend yet.
+- **Frontend gaps:** `characterName` and `race` still can't be changed from the
+  sheet — the API accepts them only on create (`requireString`; they are absent
+  from `parseOptionalFields`), so renaming needs an API change first. No
+  deleting a character or editing the campaign roster from the UI; the sheet's
+  catalog **join** rows are add/remove only (no editing `prepared` on a spell or
+  `notes` on a feature — that needs PATCH on the `[id]/[otherId]` BFF route,
+  excluding `character-feats`, which is a pure join with no API PATCH); the
+  campaign-workspace sidebar nav is a non-functional placeholder; and
+  Creature/Location data has no frontend yet.
+- **Sheet write semantics:** slot/resource writes send an absolute value, so two
+  people spending the same slot is last-write-wins (atomic `{ increment }` would
+  need a new API contract). `PATCH /characters/:id` bounds `currentHitPoints`
+  only at `≥ 0` while create caps it at `maxHitPoints + temporaryHitPoints`; the
+  UI enforces the create rule, so the cap is client-side only.
 
 ## Architecture — layered backend
 

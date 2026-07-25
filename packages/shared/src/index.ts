@@ -546,32 +546,24 @@ export interface CharacterSheet {
     level: number | null;
     notes: string | null;
   }>;
+  // The joined catalog rows are the *full* catalog projections — the sheet
+  // select reuses the /items, /spells, /feats and /features selects — so the UI
+  // can show a row's whole description without a second request.
   spells: Array<{
     known: boolean;
     prepared: boolean;
     alwaysPrepared: boolean;
     sourceClass: string | null;
-    spell: { id: string; name: string; level: number; school: SpellSchool };
+    spell: SpellCatalog;
   }>;
-  feats: Array<{
-    feat: { id: string; name: string; description: string | null };
-  }>;
-  features: Array<{
-    notes: string | null;
-    feature: { id: string; name: string; source: FeatureSource };
-  }>;
+  feats: Array<{ feat: FeatCatalog }>;
+  features: Array<{ notes: string | null; feature: FeatureCatalog }>;
   inventory: Array<{
     id: string;
     quantity: number;
     equipped: boolean;
     attuned: boolean;
-    item: {
-      id: string;
-      name: string;
-      type: string;
-      rarity: string;
-      requiresAttunement: boolean;
-    };
+    item: ItemCatalog;
   }>;
   derived: DerivedStats;
 }

@@ -23,7 +23,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { EnumSelect } from "@/components/form-fields";
+import { DetailHeader, DetailText } from "@/components/catalog-detail";
+import { useOptimisticField } from "@/hooks/use-optimistic-field";
+import { formatModifier } from "@/lib/utils";
+import { CounterControl } from "./character-sheet-editing";
+import {
+  deleteChild,
+  patchChild,
+  postChild,
+} from "./character-sheet-mutations";
 
 // --- Reference data --------------------------------------------------------
 
@@ -76,47 +90,6 @@ const REST_TYPES: Record<RestType, string> = {
   LONG: "Long rest",
 };
 
-// --- Mutation helpers ------------------------------------------------------
-
-export async function postChild(
-  topic: string,
-  body: unknown,
-): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/character-children/${topic}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const parsed = await res.json().catch(() => null);
-      toast.error(parsed?.error ?? "Could not add entry");
-      return false;
-    }
-    return true;
-  } catch {
-    toast.error("Could not reach the server");
-    return false;
-  }
-}
-
-export async function deleteChild(topic: string, id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/character-children/${topic}/${id}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      const parsed = await res.json().catch(() => null);
-      toast.error(parsed?.error ?? "Could not remove entry");
-      return false;
-    }
-    return true;
-  } catch {
-    toast.error("Could not reach the server");
-    return false;
-  }
-}
-
 // --- Shared layout primitives ----------------------------------------------
 
 export function SectionCard({
@@ -127,6 +100,7 @@ export function SectionCard({
   onOpenChange,
   open,
   form,
+  actions,
   children,
 }: {
   title: string;
@@ -136,6 +110,9 @@ export function SectionCard({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   form: React.ReactNode;
+  // Extra header buttons beside Add — the rest buttons on Spell Slots and
+  // Resources.
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -146,15 +123,18 @@ export function SectionCard({
             <CardTitle>{title}</CardTitle>
             {description && <CardDescription>{description}</CardDescription>}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            aria-expanded={open}
-            onClick={() => onOpenChange(!open)}
-          >
-            {open ? <XIcon /> : <PlusIcon />}
-            {open ? "Close" : addLabel}
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {actions}
+            <Button
+              size="sm"
+              variant="outline"
+              aria-expanded={open}
+              onClick={() => onOpenChange(!open)}
+            >
+              {open ? <XIcon /> : <PlusIcon />}
+              {open ? "Close" : addLabel}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -425,10 +405,6 @@ export function SkillsSection({
     available.map((s) => [s.key, `${s.label} (${s.ability})`]),
   );
 
-  function fmt(n: number): string {
-    return n >= 0 ? `+${n}` : `${n}`;
-  }
-
   return (
     <SectionCard
       title="Skills"
@@ -493,7 +469,7 @@ export function SkillsSection({
             >
               <span className="flex items-center gap-2">
                 <span className="tabular-nums">
-                  {fmt(skillModifiers[s.key])}
+                  {formatModifier(skillModifiers[s.key])}
                 </span>
                 <span className={row ? "font-medium" : ""}>{s.label}</span>
                 <span className="text-muted-foreground text-xs">
@@ -528,6 +504,7 @@ export function SpellSlotsSection({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resting, setResting] = useState(false);
   const [level, setLevel] = useState("1");
   const [max, setMax] = useState("1");
   const [used, setUsed] = useState("0");
@@ -587,14 +564,60 @@ export function SpellSlotsSection({
     (a, b) => Number(a.isPact) - Number(b.isPact) || a.level - b.level,
   );
 
+  // Pact magic comes back on a short rest, everything else only on a long one.
+  async function onRest(kind: "SHORT" | "LONG") {
+    const spent = spellSlots.filter(
+      (slot) => slot.used > 0 && (kind === "LONG" || slot.isPact),
+    );
+    if (spent.length === 0) {
+      toast.info("No expended slots to restore.");
+      return;
+    }
+    setResting(true);
+    const results = await Promise.all(
+      spent.map((slot) => patchChild("spell-slots", slot.id, { used: 0 })),
+    );
+    setResting(false);
+    if (results.every(Boolean)) {
+      toast.success(
+        kind === "LONG" ? "All slots restored" : "Pact slots restored",
+      );
+    }
+    router.refresh();
+  }
+
   return (
     <SectionCard
       title="Spell Slots"
-      description="Per-level slot tracks; mark Warlock pact magic separately."
+      description="Click a box to spend a slot, click it again to get it back."
       addLabel="Add slots"
       formTitle="Add spell slot track"
       open={open}
       onOpenChange={setOpen}
+      actions={
+        spellSlots.length > 0 && (
+          <>
+            {spellSlots.some((slot) => slot.isPact) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={resting}
+                onClick={() => onRest("SHORT")}
+              >
+                Short rest
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={resting}
+              onClick={() => onRest("LONG")}
+            >
+              Long rest
+            </Button>
+          </>
+        )
+      }
       form={
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-3">
@@ -650,22 +673,55 @@ export function SpellSlotsSection({
       {ordered.length === 0 ? (
         <EmptyState text="No spell slots yet." />
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <ul className="flex flex-col gap-1">
           {ordered.map((slot) => (
-            <span
-              key={slot.id}
-              className="flex items-center gap-1 rounded-md border py-1 pr-1 pl-2.5 text-sm"
-            >
-              <span>
-                {slot.isPact ? "Pact" : `Lvl ${slot.level}`}:{" "}
-                {slot.max - slot.used}/{slot.max}
-              </span>
-              <RemoveButton onRemove={() => onRemove(slot.id)} />
-            </span>
+            <SpellSlotTrack key={slot.id} slot={slot} onRemove={onRemove} />
           ))}
-        </div>
+        </ul>
       )}
     </SectionCard>
+  );
+}
+
+// One slot track. A filled box is an *expended* slot, so `filled` is `used`:
+// click an empty box to spend, a filled one to get it back.
+function SpellSlotTrack({
+  slot,
+  onRemove,
+}: {
+  slot: CharacterSheet["spellSlots"][number];
+  onRemove: (id: string) => void;
+}) {
+  const label = slot.isPact ? "Pact magic" : `Level ${slot.level}`;
+  const used = useOptimisticField(slot.used, (next) =>
+    patchChild("spell-slots", slot.id, { used: next }),
+  );
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2 text-sm">
+      <span className="w-24 shrink-0 font-medium">{label}</span>
+      <CounterControl
+        count={slot.max}
+        filled={used.value}
+        onSet={used.set}
+        pending={used.pending}
+        groupLabel={`${label} spell slots, ${slot.max - used.value} of ${slot.max} remaining`}
+        boxLabel={(index) =>
+          index < used.value
+            ? `Restore ${label} slot ${index + 1}`
+            : `Spend ${label} slot ${index + 1}`
+        }
+        stepperLabel={`${label} slots expended`}
+        decrementLabel={`Restore a ${label} slot`}
+        incrementLabel={`Spend a ${label} slot`}
+      />
+      <span className="text-muted-foreground tabular-nums">
+        {slot.max - used.value}/{slot.max} left
+      </span>
+      <span className="ml-auto">
+        <RemoveButton onRemove={() => onRemove(slot.id)} />
+      </span>
+    </li>
   );
 }
 
@@ -681,6 +737,7 @@ export function ResourcesSection({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resting, setResting] = useState(false);
   const [name, setName] = useState("");
   const [current, setCurrent] = useState("0");
   const [max, setMax] = useState("1");
@@ -727,6 +784,34 @@ export function ResourcesSection({
     }
   }
 
+  // A short rest only refills the pools flagged SHORT; a long rest refills all.
+  async function onRest(kind: RestType) {
+    const spent = resources.filter(
+      (row) =>
+        row.current < row.max &&
+        (kind === "LONG" || row.rechargeOn === "SHORT"),
+    );
+    if (spent.length === 0) {
+      toast.info("Nothing to recharge.");
+      return;
+    }
+    setResting(true);
+    const results = await Promise.all(
+      spent.map((row) =>
+        patchChild("character-resources", row.id, { current: row.max }),
+      ),
+    );
+    setResting(false);
+    if (results.every(Boolean)) {
+      toast.success(
+        kind === "LONG"
+          ? "Resources recharged"
+          : "Short-rest resources recharged",
+      );
+    }
+    router.refresh();
+  }
+
   async function onRemove(id: string) {
     const ok = await deleteChild("character-resources", id);
     if (ok) {
@@ -738,11 +823,35 @@ export function ResourcesSection({
   return (
     <SectionCard
       title="Resources"
-      description="Limited-use pools like Rage, Ki, or Channel Divinity."
+      description="Limited-use pools like Rage, Ki, or Channel Divinity. Click a box to spend one."
       addLabel="Add resource"
       formTitle="Add resource"
       open={open}
       onOpenChange={setOpen}
+      actions={
+        resources.length > 0 && (
+          <>
+            {resources.some((row) => row.rechargeOn === "SHORT") && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={resting}
+                onClick={() => onRest("SHORT")}
+              >
+                Short rest
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={resting}
+              onClick={() => onRest("LONG")}
+            >
+              Long rest
+            </Button>
+          </>
+        )
+      }
       form={
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
@@ -797,24 +906,57 @@ export function ResourcesSection({
         <EmptyState text="No resources yet." />
       ) : (
         <ul className="flex flex-col gap-1 text-sm">
-          {resources.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-            >
-              <span>
-                <span className="font-medium">{r.name}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {r.current}/{r.max} · {REST_TYPES[r.rechargeOn]}
-                </span>
-              </span>
-              <RemoveButton onRemove={() => onRemove(r.id)} />
-            </li>
+          {resources.map((resource) => (
+            <ResourceRow
+              key={resource.id}
+              resource={resource}
+              onRemove={onRemove}
+            />
           ))}
         </ul>
       )}
     </SectionCard>
+  );
+}
+
+// One resource pool. Here a filled box is an *available* use, so `filled` is
+// `current`: click a filled box to spend it, an empty one to give it back.
+function ResourceRow({
+  resource,
+  onRemove,
+}: {
+  resource: CharacterSheet["resources"][number];
+  onRemove: (id: string) => void;
+}) {
+  const current = useOptimisticField(resource.current, (next) =>
+    patchChild("character-resources", resource.id, { current: next }),
+  );
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2">
+      <span className="font-medium">{resource.name}</span>
+      <CounterControl
+        count={resource.max}
+        filled={current.value}
+        onSet={current.set}
+        pending={current.pending}
+        groupLabel={`${resource.name}, ${current.value} of ${resource.max} remaining`}
+        boxLabel={(index) =>
+          index < current.value
+            ? `Spend ${resource.name} ${index + 1}`
+            : `Restore ${resource.name} ${index + 1}`
+        }
+        stepperLabel={`${resource.name} remaining`}
+        decrementLabel={`Spend ${resource.name}`}
+        incrementLabel={`Restore ${resource.name}`}
+      />
+      <span className="text-muted-foreground tabular-nums">
+        {current.value}/{resource.max} · {REST_TYPES[resource.rechargeOn]}
+      </span>
+      <span className="ml-auto">
+        <RemoveButton onRemove={() => onRemove(resource.id)} />
+      </span>
+    </li>
   );
 }
 
@@ -1050,10 +1192,28 @@ export function ConditionsSection({
               key={c.id}
               className="flex items-center gap-1 rounded-md border py-1 pr-1 pl-2.5 text-sm"
             >
-              <span>
-                {c.name}
-                {c.level != null && ` ${c.level}`}
-              </span>
+              {/* Conditions have no catalog table, so this is a local body
+                  rather than one of the shared catalog detail renderers. */}
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <button
+                      type="button"
+                      className="hover:bg-muted/60 focus-visible:ring-ring/50 -mx-1 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none"
+                    />
+                  }
+                >
+                  {c.name}
+                  {c.level != null && ` ${c.level}`}
+                </PopoverTrigger>
+                <PopoverContent className="max-h-[65vh] overflow-y-auto">
+                  <DetailHeader
+                    title={c.name}
+                    subtitle={c.level != null ? `Level ${c.level}` : undefined}
+                  />
+                  <DetailText text={c.notes ?? "No notes."} />
+                </PopoverContent>
+              </Popover>
               <RemoveButton onRemove={() => onRemove(c.id)} />
             </span>
           ))}

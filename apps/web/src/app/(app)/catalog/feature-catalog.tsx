@@ -12,23 +12,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect, Field } from "@/components/form-fields";
 import {
+  FEATURE_SOURCES as SOURCES,
+  FeatureDetail,
+} from "@/components/catalog-detail";
+import {
   CatalogManager,
-  DetailBody,
-  DetailHeader,
-  DetailRow,
-  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
 } from "./catalog-shared";
-
-const SOURCES: Record<FeatureSource, string> = {
-  RACE: "Race",
-  CLASS: "Class",
-  SUBCLASS: "Subclass",
-  BACKGROUND: "Background",
-  FEAT: "Feat",
-};
 
 export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
   return (
@@ -56,22 +48,7 @@ export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
           close={close}
         />
       )}
-      renderDetail={(feature) => (
-        <>
-          <DetailHeader
-            title={feature.name}
-            subtitle={SOURCES[feature.source]}
-          />
-          <DetailBody>
-            <DetailRow label="Subtype" value={feature.subtype} />
-            <DetailRow
-              label="Level"
-              value={feature.level != null ? feature.level : null}
-            />
-          </DetailBody>
-          <DetailText text={feature.description} />
-        </>
-      )}
+      renderDetail={(feature) => <FeatureDetail feature={feature} />}
     />
   );
 }

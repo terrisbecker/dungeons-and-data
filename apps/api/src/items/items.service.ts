@@ -111,10 +111,11 @@ function parseArmorFields(body: Record<string, unknown>) {
 
 // Fold the 1:1 satellites back into a single flat object so the API response
 // shape is unchanged. Swap this for `return row;` to expose nested
-// weapon/armor objects instead.
-function flattenItem<T extends { weapon: object | null; armor: object | null }>(
-  row: T,
-) {
+// weapon/armor objects instead. Exported because the character sheet joins the
+// same item projection and has to flatten its inventory rows the same way.
+export function flattenItem<
+  T extends { weapon: object | null; armor: object | null },
+>(row: T) {
   const { weapon, armor, ...base } = row;
   return { ...base, ...weapon, ...armor };
 }

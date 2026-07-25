@@ -17,73 +17,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect, Field } from "@/components/form-fields";
 import {
+  ARMOR_CATEGORIES,
+  DAMAGE_TYPES,
+  ITEM_RARITIES as RARITIES,
+  ITEM_TYPES as TYPES,
+  ItemDetail,
+  WEAPON_CATEGORIES,
+} from "@/components/catalog-detail";
+import {
   CatalogManager,
-  DetailBody,
-  DetailHeader,
-  DetailRow,
-  DetailText,
   FormActions,
   patchCatalog,
   postCatalog,
 } from "./catalog-shared";
-
-const TYPES: Record<string, string> = {
-  ADVENTURING_GEAR: "Adventuring gear",
-  WEAPON: "Weapon",
-  ARMOR: "Armor / shield",
-  AMMUNITION: "Ammunition",
-  POTION: "Potion",
-  SCROLL: "Scroll",
-  WAND: "Wand",
-  ROD: "Rod",
-  STAFF: "Staff",
-  RING: "Ring",
-  WONDROUS_ITEM: "Wondrous item",
-  TOOL: "Tool",
-  FOOD_AND_DRINK: "Food & drink",
-  TRADE_GOOD: "Trade good",
-  CONTAINER: "Container",
-  MOUNT_OR_VEHICLE: "Mount / vehicle",
-  TREASURE: "Treasure",
-  OTHER: "Other",
-};
-
-const RARITIES: Record<string, string> = {
-  COMMON: "Common",
-  UNCOMMON: "Uncommon",
-  RARE: "Rare",
-  VERY_RARE: "Very rare",
-  LEGENDARY: "Legendary",
-  ARTIFACT: "Artifact",
-};
-
-const WEAPON_CATEGORIES: Record<string, string> = {
-  SIMPLE: "Simple",
-  MARTIAL: "Martial",
-};
-
-const ARMOR_CATEGORIES: Record<string, string> = {
-  LIGHT: "Light",
-  MEDIUM: "Medium",
-  HEAVY: "Heavy",
-  SHIELD: "Shield",
-};
-
-const DAMAGE_TYPES: Record<string, string> = {
-  ACID: "Acid",
-  BLUDGEONING: "Bludgeoning",
-  COLD: "Cold",
-  FIRE: "Fire",
-  FORCE: "Force",
-  LIGHTNING: "Lightning",
-  NECROTIC: "Necrotic",
-  PIERCING: "Piercing",
-  POISON: "Poison",
-  PSYCHIC: "Psychic",
-  RADIANT: "Radiant",
-  SLASHING: "Slashing",
-  THUNDER: "Thunder",
-};
 
 const WEAPON_PROPERTIES: WeaponProperty[] = [
   "AMMUNITION",
@@ -129,125 +75,6 @@ export function ItemCatalogManager({ rows }: { rows: ItemCatalog[] }) {
       )}
       renderDetail={(item) => <ItemDetail item={item} />}
     />
-  );
-}
-
-function ItemDetail({ item }: { item: ItemCatalog }) {
-  const flags = [
-    item.isMagic ? "Magic" : null,
-    item.requiresAttunement ? "Attunement" : null,
-    item.stackable ? "Stackable" : null,
-    item.consumable ? "Consumable" : null,
-  ].filter(Boolean);
-
-  return (
-    <>
-      <DetailHeader
-        title={item.name}
-        subtitle={`${TYPES[item.type]} · ${RARITIES[item.rarity]}`}
-      />
-      <DetailBody>
-        <DetailRow
-          label="Value"
-          value={
-            item.baseValueCp != null ? `${item.baseValueCp} cp` : "Priceless"
-          }
-        />
-        <DetailRow
-          label="Weight"
-          value={item.weight != null ? `${item.weight} lb` : null}
-        />
-        <DetailRow
-          label="Tags"
-          value={
-            item.tags && item.tags.length > 0 ? item.tags.join(", ") : null
-          }
-        />
-        <DetailRow
-          label=""
-          value={flags.length > 0 ? flags.join(" · ") : null}
-        />
-
-        {item.type === "WEAPON" && (
-          <>
-            <DetailRow
-              label="Category"
-              value={
-                item.weaponCategory
-                  ? WEAPON_CATEGORIES[item.weaponCategory]
-                  : null
-              }
-            />
-            <DetailRow
-              label="Damage"
-              value={
-                item.damageDice
-                  ? `${item.damageDice}${
-                      item.damageType
-                        ? ` ${DAMAGE_TYPES[item.damageType].toLowerCase()}`
-                        : ""
-                    }`
-                  : null
-              }
-            />
-            <DetailRow label="Versatile" value={item.versatileDamage} />
-            <DetailRow
-              label="Range"
-              value={
-                item.rangeNormal != null
-                  ? `${item.rangeNormal}${
-                      item.rangeLong != null ? `/${item.rangeLong}` : ""
-                    } ft`
-                  : null
-              }
-            />
-            <DetailRow
-              label="Properties"
-              value={
-                item.weaponProperties && item.weaponProperties.length > 0
-                  ? item.weaponProperties
-                      .map((p) => p.replace("_", " ").toLowerCase())
-                      .join(", ")
-                  : null
-              }
-            />
-          </>
-        )}
-
-        {item.type === "ARMOR" && (
-          <>
-            <DetailRow
-              label="Category"
-              value={
-                item.armorCategory ? ARMOR_CATEGORIES[item.armorCategory] : null
-              }
-            />
-            <DetailRow
-              label="Base AC"
-              value={
-                item.baseArmorClass != null
-                  ? `${item.baseArmorClass}${
-                      item.addDexToArmorClass
-                        ? ` + Dex${
-                            item.maxDexBonus != null
-                              ? ` (max ${item.maxDexBonus})`
-                              : ""
-                          }`
-                        : ""
-                    }`
-                  : null
-              }
-            />
-            <DetailRow label="Str req" value={item.strengthRequirement} />
-            <DetailRow
-              label="Stealth"
-              value={item.stealthDisadvantage ? "Disadvantage" : null}
-            />
-          </>
-        )}
-      </DetailBody>
-      <DetailText text={item.description} />
-    </>
   );
 }
 

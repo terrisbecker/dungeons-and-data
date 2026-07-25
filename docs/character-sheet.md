@@ -70,6 +70,15 @@ The sheet is a single JSON object with three parts (the core view at
    - `features` — join rows with per-character `notes` + the joined `feature`
    - `inventory` — join rows (`quantity`/`equipped`/`attuned`) + the joined
      `item` catalog row
+
+   The four joined **catalog** rows are the _full_ catalog projections — the
+   sheet select reuses the very selects `/items`, `/spells`, `/feats` and
+   `/features` return (and flattens the item's weapon/armor satellites through
+   the same `flattenItem`). So `spell.castingTime`, `item.damageDice` and every
+   `description` are already on the sheet, and the UI can open a detail popover
+   for a row without a second request. In `@dnd/shared` they are typed as
+   `SpellCatalog` / `FeatCatalog` / `FeatureCatalog` / `ItemCatalog`.
+
 3. **`derived`** — values computed in the service layer, never stored (see
    `src/characters/characters.derived.ts`):
    - `totalLevel` (sum of class levels) and `proficiencyBonus`
