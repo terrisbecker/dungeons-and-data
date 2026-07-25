@@ -71,6 +71,56 @@ export interface CharacterSummary {
   updatedAt: string;
 }
 
+// --- Locations -------------------------------------------------------------
+
+export type CreatureKind = "NPC" | "MONSTER";
+
+// The lightweight projection the API reuses for a location's parent/children
+// (locationSummarySelect in locations.queries.ts).
+export interface LocationSummary {
+  id: string;
+  locationName: string;
+  type: string;
+}
+
+// GET /locations (and the POST/PATCH responses) — mirrors locationSelect.
+// Named LocationRow rather than Location so it doesn't shadow the DOM global.
+export interface LocationRow {
+  id: string;
+  locationName: string;
+  description: string | null;
+  // Free text on purpose (realm, region, town, dungeon, …) — homebrew stays open.
+  type: string;
+  campaignId: string | null;
+  parentId: string | null;
+  parent: LocationSummary | null;
+  children: LocationSummary[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /locations/:id — locationDetailSelect adds the creatures placed here.
+export interface LocationDetail extends LocationRow {
+  creaturePlacements: Array<{
+    quantity: number;
+    notes: string | null;
+    creature: { id: string; name: string; kind: CreatureKind };
+  }>;
+}
+
+export interface CreateLocationInput {
+  locationName: string;
+  type: string;
+  description?: string | null;
+  parentId?: string | null;
+  campaignId?: string | null;
+}
+
+// A location never changes campaigns from the UI, so campaignId is create-only.
+export type UpdateLocationInput = Partial<
+  Omit<CreateLocationInput, "campaignId">
+>;
+
 // --- Character creation + sheet -------------------------------------------
 
 // The fixed 5e enum sets, mirrored from the Prisma schema as string unions.

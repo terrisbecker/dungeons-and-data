@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type {
   ApiError,
   AuthResponse,
@@ -8,6 +9,8 @@ import type {
   FeatCatalog,
   FeatureCatalog,
   ItemCatalog,
+  LocationDetail,
+  LocationRow,
   MeResponse,
   SpellCatalog,
 } from "@dnd/shared";
@@ -72,10 +75,11 @@ export function createCampaign(body: unknown): Promise<Campaign> {
   });
 }
 
-// A single campaign with its roster (GET /campaigns/:id).
-export function getCampaign(id: string): Promise<Campaign> {
-  return serverFetch<Campaign>(`/campaigns/${id}`);
-}
+// A single campaign with its roster (GET /campaigns/:id). Wrapped in React's
+// cache() so the campaign layout and the page it renders share one request.
+export const getCampaign = cache((id: string): Promise<Campaign> => {
+  return serverFetch<Campaign>(`/campaigns/${encodeURIComponent(id)}`);
+});
 
 // Join a campaign as a PLAYER by its id (POST /campaigns/:id/join). The API
 // seats the caller (from the token) — the id is only used to find the campaign.
@@ -155,6 +159,43 @@ export function listFeats(): Promise<FeatCatalog[]> {
 
 export function listFeatures(): Promise<FeatureCatalog[]> {
   return serverFetch<FeatureCatalog[]>("/features");
+}
+
+// Every location owned by a campaign (GET /locations?campaignId=…), flat and
+// alphabetical. The browser derives the tree, the breadcrumb, and the parent
+// picker from this single list rather than fetching level by level.
+export function listLocations(campaignId: string): Promise<LocationRow[]> {
+  return serverFetch<LocationRow[]>(
+    `/locations?campaignId=${encodeURIComponent(campaignId)}`,
+  );
+}
+
+// One location with the creatures placed there (GET /locations/:id).
+export function getLocation(id: string): Promise<LocationDetail> {
+  return serverFetch<LocationDetail>(`/locations/${encodeURIComponent(id)}`);
+}
+
+export function createLocation(body: unknown): Promise<LocationRow> {
+  return serverFetch<LocationRow>("/locations", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateLocation(
+  id: string,
+  body: unknown,
+): Promise<LocationRow> {
+  return serverFetch<LocationRow>(`/locations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteLocation(id: string): Promise<void> {
+  return serverFetch<void>(`/locations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.

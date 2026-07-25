@@ -209,6 +209,21 @@ export function optionalUuidField(
   return requireUuid(obj[key]);
 }
 
+// The optionalUuidField counterpart of nullableString: an explicit `null` means
+// "clear this column" while an absent key still means "leave it alone".
+export function nullableUuidField(
+  obj: Record<string, unknown>,
+  key: string,
+): string | null | undefined {
+  if (obj[key] === undefined) {
+    return undefined;
+  }
+  if (obj[key] === null) {
+    return null;
+  }
+  return requireUuid(obj[key]);
+}
+
 export function optionalStringArray(
   obj: Record<string, unknown>,
   key: string,

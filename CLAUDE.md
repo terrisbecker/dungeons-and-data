@@ -185,7 +185,13 @@ Working on branch `frontend/character-creation-wizard`.
     lists by `?creatureId` **or** `?locationId`.
 - **Location CRUD** (`locations/`) — standalone catalog with the self-nesting
   hierarchy; the detail read (`GET /locations/:id`) includes `parent`/`children`
-  summaries and the creatures placed there.
+  summaries and the creatures placed there. The list read filters by
+  `?campaignId` (same shape as `GET /characters?playerId`); the frontend fetches
+  a campaign's whole flat list once and derives the tree client-side.
+  `description`/`parentId` are **nullable on PATCH** (`nullableString` /
+  `nullableUuidField`, so an explicit `null` clears them and a location can be
+  promoted back to a root), and re-parenting is refused when it would create a
+  cycle (service-layer invariant, walks up from the proposed parent → 400).
 - **Seed + docs:** `prisma/seed.ts` populates **every table** (re-runnable): the
   catalog rows, 5 fully-populated test characters, a nested `Location` hierarchy
   (realm → region → town/dungeon → building), and 5 `Creature`s (2 NPCs, 3
@@ -207,8 +213,29 @@ Working on branch `frontend/character-creation-wizard`.
   - **Dashboard** (`(app)/dashboard`): reads `/auth/me` + the player's
     characters; lists campaign memberships and characters, with a
     **create-campaign** dialog and a **New character** link.
-  - **Campaign workspace** (`(app)/campaigns/[id]`): a sidebar-shell scaffold
-    (the nav items are still placeholders).
+  - **Campaign workspace** (`(app)/campaigns/[id]`): `layout.tsx` fetches the
+    campaign (via a `cache()`d `getCampaign`, shared with the pages under it) and
+    renders `campaign-workspace.tsx`, a sidebar shell that takes `children`. Each
+    nav item is a real route — Overview (`page.tsx`, the invite code + roster),
+    **Locations**, and `characters`/`encounters`/`settings` stubs; `isActive`
+    comes from `usePathname()` so a nav item stays lit while drilled into a
+    sub-route.
+  - **Campaign locations** (`(app)/campaigns/[id]/locations`): a drill-down
+    browser over the `Location` hierarchy. Both the roots page and
+    `[locationId]/page.tsx` load the campaign's **whole flat list** once
+    (`listLocations(campaignId)`) and derive the breadcrumb, the current level's
+    children, and the parent picker from it via the pure helpers in
+    `location-tree.ts` (every walk carries a `visited` set — pre-existing rows
+    predate the API's cycle check). The detail page additionally reads
+    `GET /locations/:id` for the creatures placed there, and **404s when
+    `campaignId` doesn't match the URL** (API reads are open to any authed user).
+    `locations-browser.tsx` stays a **server component** composing three client
+    dialogs: create/edit (`location-form-dialog.tsx` — one dialog for both, with
+    the edited location and its descendants excluded from the parent options) and
+    a delete confirm that spells out both cascade behaviours (children are
+    orphaned to the top level, creature placements are removed). Writes are
+    DM-or-Admin only (`locations-data.ts` `canManageCampaign` decides what to
+    render; the API guards still enforce it).
   - **Character creation** (`(app)/characters/new`): a wizard that captures
     **only the main `PlayerCharacter` row** — Identity → Abilities → Combat →
     Roleplay → Review. It deliberately does **not** collect satellite-table data;
@@ -269,8 +296,11 @@ Working on branch `frontend/character-creation-wizard`.
   catalog **join** rows are add/remove only (no editing `prepared` on a spell or
   `notes` on a feature — that needs PATCH on the `[id]/[otherId]` BFF route,
   excluding `character-feats`, which is a pure join with no API PATCH); the
-  campaign-workspace sidebar nav is a non-functional placeholder; and
-  Creature/Location data has no frontend yet.
+  campaign workspace's `characters`/`encounters`/`settings` routes are
+  placeholders (a campaign-wide roster needs `GET /characters` to filter by
+  `campaignId`, which it doesn't); and **Creature** data has no frontend yet —
+  including creature _placements_, so a location's "Creatures here" list is
+  read-only.
 - **Sheet write semantics:** slot/resource writes send an absolute value, so two
   people spending the same slot is last-write-wins (atomic `{ increment }` would
   need a new API contract). `PATCH /characters/:id` bounds `currentHitPoints`

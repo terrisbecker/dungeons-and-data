@@ -162,9 +162,19 @@ export const guardLocationCreate = guard((auth, req) =>
   ),
 );
 
-export const guardLocationByParamId = guard((auth, req) =>
-  assertCanWriteLocation(auth, requireUuid(req.params.id)),
-);
+export const guardLocationByParamId = guard(async (auth, req) => {
+  await assertCanWriteLocation(auth, requireUuid(req.params.id));
+  // A PATCH may also *move* the location to another campaign. The check above
+  // only covers the campaign it currently belongs to, so authorize the target
+  // scope too — otherwise a DM could push their location into someone else's
+  // campaign. DELETE shares this guard and carries no body, hence the presence
+  // check.
+  if (req.body === undefined || req.body === null) return;
+  const target = optionalUuidField(asRecord(req.body), "campaignId");
+  if (target !== undefined) {
+    await assertCanWriteCampaignScopedCreate(auth, target);
+  }
+});
 
 // --- Inventory items (polymorphic owner) -----------------------------------
 
