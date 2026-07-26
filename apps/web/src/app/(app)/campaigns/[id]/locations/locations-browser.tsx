@@ -4,6 +4,7 @@ import type { LocationDetail, LocationRow } from "@dnd/shared";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteLocationDialog } from "./delete-location-dialog";
+import { LocationCreatures } from "./location-creatures";
 import { LocationFormDialog } from "./location-form-dialog";
 import { ancestorsOf, childrenOf, indexLocations } from "./location-tree";
 
@@ -134,39 +135,12 @@ export function LocationsBrowser({
         )}
       </section>
 
-      {current && current.creaturePlacements.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Creatures here</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-1">
-              {current.creaturePlacements.map((placement) => (
-                <li
-                  key={placement.creature.id}
-                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-medium">
-                      {placement.creature.name}
-                    </span>
-                    <Badge variant="outline">
-                      {placement.creature.kind === "NPC" ? "NPC" : "Monster"}
-                    </Badge>
-                    {placement.notes && (
-                      <span className="text-muted-foreground truncate text-xs">
-                        {placement.notes}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground shrink-0 text-xs">
-                    ×{placement.quantity}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+      {current && (
+        <LocationCreatures
+          campaignId={campaignId}
+          location={current}
+          canManage={canManage}
+        />
       )}
     </div>
   );

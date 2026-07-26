@@ -8,6 +8,7 @@ import {
   LayoutDashboardIcon,
   MapPinIcon,
   SettingsIcon,
+  SkullIcon,
   SwordsIcon,
   UsersIcon,
   type LucideIcon,
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { title: "Overview", icon: LayoutDashboardIcon, segment: "" },
   { title: "Characters", icon: UsersIcon, segment: "/characters" },
   { title: "Locations", icon: MapPinIcon, segment: "/locations" },
+  { title: "Creatures", icon: SkullIcon, segment: "/creatures" },
   { title: "Encounters", icon: SwordsIcon, segment: "/encounters" },
   { title: "Settings", icon: SettingsIcon, segment: "/settings" },
 ];

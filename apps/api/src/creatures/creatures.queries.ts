@@ -1,5 +1,6 @@
-import { Prisma } from "@prisma/client";
+import { type CreatureKind, Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { itemCatalogSelect } from "../items/items.queries.js";
 
 // Explicit column selection so responses never leak columns we didn't intend.
 // The full set of stored Creature scalars, reused across reads.
@@ -56,7 +57,8 @@ const creatureScalarSelect = {
   updatedAt: true,
 } satisfies Prisma.CreatureSelect;
 
-// Lighter projection for list responses.
+// Lighter projection for list responses. campaignId is included so callers can
+// tell a campaign-owned creature from a shared-catalog one without a second read.
 const creatureListSelect = {
   id: true,
   kind: true,
@@ -67,6 +69,7 @@ const creatureListSelect = {
   armorClass: true,
   hitPoints: true,
   challengeRating: true,
+  campaignId: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.CreatureSelect;
@@ -105,15 +108,7 @@ const creatureSheetSelect = {
       quantity: true,
       equipped: true,
       attuned: true,
-      item: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          rarity: true,
-          requiresAttunement: true,
-        },
-      },
+      item: { select: itemCatalogSelect },
     },
   },
   placements: {
@@ -129,8 +124,32 @@ export function createCreature(data: Prisma.CreatureUncheckedCreateInput) {
   return prisma.creature.create({ data, select: creatureScalarSelect });
 }
 
-export function findCreatures() {
+// Scoping a list read: a campaign's own creatures, the shared-catalog ones
+// (campaignId null), or — the common case for a DM browsing a campaign — both.
+// Passing no filter still returns every creature.
+export interface CreatureListFilter {
+  campaignId?: string;
+  includeShared?: boolean;
+  kind?: CreatureKind;
+}
+
+function creatureListWhere({
+  campaignId,
+  includeShared,
+}: CreatureListFilter): Prisma.CreatureWhereInput | undefined {
+  if (campaignId === undefined) {
+    return includeShared ? { campaignId: null } : undefined;
+  }
+  return includeShared
+    ? { OR: [{ campaignId }, { campaignId: null }] }
+    : { campaignId };
+}
+
+export function findCreatures(filter: CreatureListFilter = {}) {
+  const scope = creatureListWhere(filter);
+  const kind = filter.kind === undefined ? undefined : { kind: filter.kind };
   return prisma.creature.findMany({
+    where: scope && kind ? { AND: [scope, kind] } : (scope ?? kind),
     orderBy: { name: "asc" },
     select: creatureListSelect,
   });

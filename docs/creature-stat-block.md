@@ -10,6 +10,26 @@ common case stays cheap:
   every other related table joined in (stat-block entries, damage modifiers,
   inventory, and location placements). One request, no other calls needed.
 
+**`GET /creatures`** is the lightweight list, and it takes three optional
+filters (all combinable):
+
+| Query param          | Effect                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `campaignId=<uuid>`  | only that campaign's creatures                                                                   |
+| `includeShared=true` | also include shared-catalog creatures (`campaignId` null); on its own it narrows to _only_ those |
+| `kind=NPC\|MONSTER`  | one kind                                                                                         |
+
+With no params it returns everything. A malformed `campaignId` or an unknown
+`kind` is a `400`. The list row carries `campaignId` so a client can tell a
+campaign-owned creature from a shared one, and — like every other creature
+endpoint — `challengeRating` comes back as a plain number.
+
+```bash
+# A DM browsing one campaign: its own creatures plus the shared bestiary.
+curl -s "http://localhost:3000/creatures?campaignId=$CAMPAIGN&includeShared=true" \
+  -H "authorization: Bearer $TOKEN" | jq -r '.[] | "\(.name)  \(.kind)  \(.campaignId // "shared")"'
+```
+
 The sub-resources also have their own endpoints if you'd rather fetch or edit a
 single section:
 
@@ -62,7 +82,9 @@ The stat block is a single JSON object with three parts (the core view at
      legendary/lair actions, …), ordered by `sortOrder`, with `legendaryCost`
    - `damageModifiers` — vulnerabilities / resistances / immunities
    - `inventory` — join rows (`quantity`/`equipped`/`attuned`) + the joined
-     `item` catalog row
+     `item` catalog row. This is the **full** `ItemCatalog` projection (the same
+     one `GET /items` returns, weapon/armor satellites flattened in), so the UI
+     can render an item's whole detail without a second request.
    - `placements` — where the creature appears (`quantity`/`notes` + the joined
      `location`)
 3. **`derived`** — values computed in the service layer, never stored (see
@@ -96,4 +118,11 @@ curl -s "http://localhost:3000/creatures/$CID/sheet" \
   returns **404**.
 - Creature-owned loot goes through the shared inventory endpoint: `POST
 /inventory-items` with a `creatureId` (exactly one of `characterId` /
-  `creatureId` must be set). The 5e 3-item attunement cap is enforced per owner.
+  `creatureId` must be set); `PATCH /inventory-items/:id` then edits
+  `quantity`/`equipped`/`attuned` (the owner columns are immutable). The 5e
+  3-item attunement cap is enforced per owner and answers **409**. The stat
+  block's Inventory section drives exactly these calls.
+- A **placement** write authorizes both ends — the creature _and_ the location —
+  so moving a shared monster into a campaign you don't run is a **403**. The same
+  goes for `PATCH /creatures/:id` with a `campaignId`: the target scope is
+  re-checked, not just the creature's current one.

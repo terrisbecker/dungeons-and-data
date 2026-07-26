@@ -17,7 +17,7 @@ import {
   EditableText,
   EditableToggle,
   TickBoxes,
-} from "./character-sheet-editing";
+} from "@/components/editable-fields";
 import { patchCharacter } from "./character-sheet-mutations";
 
 // The interactive half of the character sheet: every non-calculated scalar on

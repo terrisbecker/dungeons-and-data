@@ -1,18 +1,7 @@
 import { redirect } from "next/navigation";
-import type { LocationRow, MeResponse } from "@dnd/shared";
+import type { LocationRow } from "@dnd/shared";
 import { ApiRequestError, getMe, listLocations } from "@/lib/api";
-
-// Writing a campaign-scoped location is Admin-or-that-campaign's-DM (see
-// assertCanWriteCampaignScoped in the API). Mirrored here only to decide what
-// to render — the API guards still enforce it on every mutation.
-export function canManageCampaign(me: MeResponse, campaignId: string): boolean {
-  return (
-    me.systemRole === "ADMIN" ||
-    me.memberships.some(
-      (m) => m.campaign.id === campaignId && m.role === "DUNGEON_MASTER",
-    )
-  );
-}
+import { canManageCampaign } from "../campaign-data";
 
 // The whole campaign's location list plus the viewer's write permission. Both
 // location pages need exactly this pair.

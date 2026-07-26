@@ -6,6 +6,9 @@ import type {
   CampaignRole,
   CharacterSheet,
   CharacterSummary,
+  CreatureKind,
+  CreatureStatBlock,
+  CreatureSummary,
   FeatCatalog,
   FeatureCatalog,
   ItemCatalog,
@@ -194,6 +197,52 @@ export function updateLocation(
 
 export function deleteLocation(id: string): Promise<void> {
   return serverFetch<void>(`/locations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// Every creature visible from a campaign (GET /creatures). `includeShared`
+// folds in the shared-catalog rows (campaignId null) so a DM sees their own
+// creatures and the common bestiary in one read.
+export function listCreatures(
+  campaignId: string,
+  { includeShared = false, kind }: ListCreaturesOptions = {},
+): Promise<CreatureSummary[]> {
+  const query = new URLSearchParams({ campaignId });
+  if (includeShared) query.set("includeShared", "true");
+  if (kind) query.set("kind", kind);
+  return serverFetch<CreatureSummary[]>(`/creatures?${query}`);
+}
+
+export interface ListCreaturesOptions {
+  includeShared?: boolean;
+  kind?: CreatureKind;
+}
+
+// The full stat block (GET /creatures/:id/sheet) — scalars, derived, skills,
+// entries, damage modifiers, inventory, and location placements.
+export function getCreatureStatBlock(id: string): Promise<CreatureStatBlock> {
+  return serverFetch<CreatureStatBlock>(
+    `/creatures/${encodeURIComponent(id)}/sheet`,
+  );
+}
+
+export function createCreature(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/creatures", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateCreature(id: string, body: unknown): Promise<unknown> {
+  return serverFetch(`/creatures/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteCreature(id: string): Promise<void> {
+  return serverFetch<void>(`/creatures/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }

@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PlusIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import type {
-  Ability,
   CharacterSheet,
   RestType,
   Skill,
@@ -13,13 +11,6 @@ import type {
 } from "@dnd/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,8 +22,15 @@ import {
 import { EnumSelect } from "@/components/form-fields";
 import { DetailHeader, DetailText } from "@/components/catalog-detail";
 import { useOptimisticField } from "@/hooks/use-optimistic-field";
+import { PROFICIENCY_ITEMS, SKILLS } from "@/lib/skills";
 import { formatModifier } from "@/lib/utils";
-import { CounterControl } from "./character-sheet-editing";
+import { CounterControl } from "@/components/editable-fields";
+import {
+  EmptyState,
+  FormButtons,
+  RemoveButton,
+  SectionCard,
+} from "@/components/section-card";
 import {
   deleteChild,
   patchChild,
@@ -40,33 +38,6 @@ import {
 } from "./character-sheet-mutations";
 
 // --- Reference data --------------------------------------------------------
-
-const SKILLS: { key: Skill; label: string; ability: Ability }[] = [
-  { key: "ACROBATICS", label: "Acrobatics", ability: "DEX" },
-  { key: "ANIMAL_HANDLING", label: "Animal Handling", ability: "WIS" },
-  { key: "ARCANA", label: "Arcana", ability: "INT" },
-  { key: "ATHLETICS", label: "Athletics", ability: "STR" },
-  { key: "DECEPTION", label: "Deception", ability: "CHA" },
-  { key: "HISTORY", label: "History", ability: "INT" },
-  { key: "INSIGHT", label: "Insight", ability: "WIS" },
-  { key: "INTIMIDATION", label: "Intimidation", ability: "CHA" },
-  { key: "INVESTIGATION", label: "Investigation", ability: "INT" },
-  { key: "MEDICINE", label: "Medicine", ability: "WIS" },
-  { key: "NATURE", label: "Nature", ability: "INT" },
-  { key: "PERCEPTION", label: "Perception", ability: "WIS" },
-  { key: "PERFORMANCE", label: "Performance", ability: "CHA" },
-  { key: "PERSUASION", label: "Persuasion", ability: "CHA" },
-  { key: "RELIGION", label: "Religion", ability: "INT" },
-  { key: "SLEIGHT_OF_HAND", label: "Sleight of Hand", ability: "DEX" },
-  { key: "STEALTH", label: "Stealth", ability: "DEX" },
-  { key: "SURVIVAL", label: "Survival", ability: "WIS" },
-];
-
-const PROFICIENCY_ITEMS: Record<SkillProficiency, string> = {
-  PROFICIENT: "Proficient",
-  EXPERTISE: "Expertise",
-  HALF: "Half",
-};
 
 const HIT_DICE: Record<string, string> = {
   "6": "d6",
@@ -89,108 +60,6 @@ const REST_TYPES: Record<RestType, string> = {
   SHORT: "Short rest",
   LONG: "Long rest",
 };
-
-// --- Shared layout primitives ----------------------------------------------
-
-export function SectionCard({
-  title,
-  description,
-  addLabel,
-  formTitle,
-  onOpenChange,
-  open,
-  form,
-  actions,
-  children,
-}: {
-  title: string;
-  description?: string;
-  addLabel: string;
-  formTitle: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  form: React.ReactNode;
-  // Extra header buttons beside Add — the rest buttons on Spell Slots and
-  // Resources.
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle>{title}</CardTitle>
-            {description && <CardDescription>{description}</CardDescription>}
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {actions}
-            <Button
-              size="sm"
-              variant="outline"
-              aria-expanded={open}
-              onClick={() => onOpenChange(!open)}
-            >
-              {open ? <XIcon /> : <PlusIcon />}
-              {open ? "Close" : addLabel}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {open && (
-          <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
-            <p className="text-sm font-medium">{formTitle}</p>
-            {form}
-          </div>
-        )}
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
-
-export function RemoveButton({ onRemove }: { onRemove: () => void }) {
-  const [busy, setBusy] = useState(false);
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Remove"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        await onRemove();
-        setBusy(false);
-      }}
-    >
-      <XIcon />
-    </Button>
-  );
-}
-
-export function EmptyState({ text }: { text: string }) {
-  return <p className="text-muted-foreground text-sm">{text}</p>;
-}
-
-export function FormButtons({
-  submitting,
-  onCancel,
-}: {
-  submitting: boolean;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="flex justify-end gap-2">
-      <Button type="button" variant="outline" onClick={onCancel}>
-        Cancel
-      </Button>
-      <Button type="submit" disabled={submitting}>
-        {submitting ? "Adding…" : "Add"}
-      </Button>
-    </div>
-  );
-}
 
 // --- Classes ---------------------------------------------------------------
 
