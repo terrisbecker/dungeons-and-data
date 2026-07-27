@@ -131,6 +131,7 @@ export function PlacementsSection({
               {canManage && (
                 <RemoveButton
                   onRemove={() => onRemove(placement.location.id)}
+                  confirm={`Remove this placement at ${placement.location.locationName}?`}
                 />
               )}
             </span>

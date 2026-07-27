@@ -123,7 +123,10 @@ export function SkillsSection({
                 {formatModifier(creature.derived.skills[s.key])}
               </span>
               {canManage && row && (
-                <RemoveButton onRemove={() => onRemove(row.id)} />
+                <RemoveButton
+                  onRemove={() => onRemove(row.id)}
+                  confirm={`Remove proficiency in ${s.label}?`}
+                />
               )}
             </span>
           </li>
@@ -259,7 +262,12 @@ export function DamageModifiersSection({
                 </span>
               )}
             </span>
-            {canManage && <RemoveButton onRemove={() => onRemove(row.id)} />}
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(row.id)}
+                confirm={`Remove this ${DAMAGE_MODIFIER_KINDS[row.kind].toLowerCase()}?`}
+              />
+            )}
           </li>
         ))}
       </ul>
@@ -529,7 +537,10 @@ export function StatBlockEntriesSection({
                           >
                             Edit
                           </Button>
-                          <RemoveButton onRemove={() => onRemove(entry.id)} />
+                          <RemoveButton
+                            onRemove={() => onRemove(entry.id)}
+                            confirm={`Remove ${entry.name}?`}
+                          />
                         </span>
                       )}
                     </div>

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { unauthorized } from "../http/http-error.js";
 import { requireUuid } from "../http/validate.js";
+import { leaveMembershipService } from "../campaign-memberships/campaign-memberships.service.js";
 import {
   createCampaignService,
   deleteCampaignService,
@@ -38,6 +39,17 @@ export async function joinCampaign(req: Request, res: Response): Promise<void> {
     .json(
       await joinCampaignService(requireUuid(req.params.id), req.auth.playerId),
     );
+}
+
+export async function leaveCampaign(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  // requireAuth guarantees req.auth; the check keeps the type honest and
+  // ensures the only membership ever removed is the caller's own.
+  if (!req.auth) throw unauthorized();
+  await leaveMembershipService(requireUuid(req.params.id), req.auth.playerId);
+  res.status(204).send();
 }
 
 export async function patchCampaign(

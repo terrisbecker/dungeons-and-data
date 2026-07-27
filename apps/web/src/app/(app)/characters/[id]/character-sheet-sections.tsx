@@ -11,6 +11,7 @@ import type {
 } from "@dnd/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -66,9 +67,11 @@ const REST_TYPES: Record<RestType, string> = {
 export function ClassesSection({
   characterId,
   classes,
+  canManage,
 }: {
   characterId: string;
   classes: CharacterSheet["classes"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -123,6 +126,48 @@ export function ClassesSection({
       toast.success("Class removed");
       router.refresh();
     }
+  }
+
+  const body =
+    classes.length === 0 ? (
+      <EmptyState text="No classes yet." />
+    ) : (
+      <ul className="flex flex-col gap-1 text-sm">
+        {classes.map((c) => (
+          <li
+            key={c.id}
+            className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+          >
+            <span>
+              <span className="font-medium">{c.className}</span>
+              {c.subclass && (
+                <span className="text-muted-foreground"> ({c.subclass})</span>
+              )}
+              <span className="text-muted-foreground">
+                {" "}
+                · Level {c.level} · d{c.hitDieSize}
+              </span>
+            </span>
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(c.id)}
+                confirm={`Remove ${c.className}?`}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Classes</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -191,30 +236,7 @@ export function ClassesSection({
         </form>
       }
     >
-      {classes.length === 0 ? (
-        <EmptyState text="No classes yet." />
-      ) : (
-        <ul className="flex flex-col gap-1 text-sm">
-          {classes.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-            >
-              <span>
-                <span className="font-medium">{c.className}</span>
-                {c.subclass && (
-                  <span className="text-muted-foreground"> ({c.subclass})</span>
-                )}
-                <span className="text-muted-foreground">
-                  {" "}
-                  · Level {c.level} · d{c.hitDieSize}
-                </span>
-              </span>
-              <RemoveButton onRemove={() => onRemove(c.id)} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {body}
     </SectionCard>
   );
 }
@@ -225,10 +247,12 @@ export function SkillsSection({
   characterId,
   skills,
   skillModifiers,
+  canManage,
 }: {
   characterId: string;
   skills: CharacterSheet["skills"];
   skillModifiers: Record<Skill, number>;
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -273,6 +297,54 @@ export function SkillsSection({
   const skillItems: Record<string, string> = Object.fromEntries(
     available.map((s) => [s.key, `${s.label} (${s.ability})`]),
   );
+
+  const body = (
+    <div className="grid gap-1 sm:grid-cols-2">
+      {SKILLS.map((s) => {
+        const row = proficiencyById.get(s.key);
+        return (
+          <div
+            key={s.key}
+            className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm"
+          >
+            <span className="flex items-center gap-2">
+              <span className="tabular-nums">
+                {formatModifier(skillModifiers[s.key])}
+              </span>
+              <span className={row ? "font-medium" : ""}>{s.label}</span>
+              <span className="text-muted-foreground text-xs">
+                ({s.ability})
+              </span>
+            </span>
+            {row && (
+              <span className="flex items-center gap-1">
+                <Badge variant="outline" className="text-xs">
+                  {PROFICIENCY_ITEMS[row.proficiency]}
+                </Badge>
+                {canManage && (
+                  <RemoveButton
+                    onRemove={() => onRemove(row.id)}
+                    confirm={`Remove proficiency in ${s.label}?`}
+                  />
+                )}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Skills</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
+  }
 
   return (
     <SectionCard
@@ -328,35 +400,7 @@ export function SkillsSection({
         </form>
       }
     >
-      <div className="grid gap-1 sm:grid-cols-2">
-        {SKILLS.map((s) => {
-          const row = proficiencyById.get(s.key);
-          return (
-            <div
-              key={s.key}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm"
-            >
-              <span className="flex items-center gap-2">
-                <span className="tabular-nums">
-                  {formatModifier(skillModifiers[s.key])}
-                </span>
-                <span className={row ? "font-medium" : ""}>{s.label}</span>
-                <span className="text-muted-foreground text-xs">
-                  ({s.ability})
-                </span>
-              </span>
-              {row && (
-                <span className="flex items-center gap-1">
-                  <Badge variant="outline" className="text-xs">
-                    {PROFICIENCY_ITEMS[row.proficiency]}
-                  </Badge>
-                  <RemoveButton onRemove={() => onRemove(row.id)} />
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {body}
     </SectionCard>
   );
 }
@@ -366,9 +410,11 @@ export function SkillsSection({
 export function SpellSlotsSection({
   characterId,
   spellSlots,
+  canManage,
 }: {
   characterId: string;
   spellSlots: CharacterSheet["spellSlots"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -453,6 +499,37 @@ export function SpellSlotsSection({
       );
     }
     router.refresh();
+  }
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Spell Slots</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {ordered.length === 0 ? (
+            <EmptyState text="No spell slots yet." />
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {ordered.map((slot) => (
+                <li
+                  key={slot.id}
+                  className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                >
+                  <span className="font-medium">
+                    {slot.isPact ? "Pact magic" : `Level ${slot.level}`}
+                  </span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {slot.max - slot.used}/{slot.max} left
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -588,7 +665,10 @@ function SpellSlotTrack({
         {slot.max - used.value}/{slot.max} left
       </span>
       <span className="ml-auto">
-        <RemoveButton onRemove={() => onRemove(slot.id)} />
+        <RemoveButton
+          onRemove={() => onRemove(slot.id)}
+          confirm={`Remove this ${label.toLowerCase()} slot track?`}
+        />
       </span>
     </li>
   );
@@ -599,9 +679,11 @@ function SpellSlotTrack({
 export function ResourcesSection({
   characterId,
   resources,
+  canManage,
 }: {
   characterId: string;
   resources: CharacterSheet["resources"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -687,6 +769,36 @@ export function ResourcesSection({
       toast.success("Resource removed");
       router.refresh();
     }
+  }
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Resources</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {resources.length === 0 ? (
+            <EmptyState text="No resources yet." />
+          ) : (
+            <ul className="flex flex-col gap-1 text-sm">
+              {resources.map((resource) => (
+                <li
+                  key={resource.id}
+                  className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+                >
+                  <span className="font-medium">{resource.name}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {resource.current}/{resource.max} ·{" "}
+                    {REST_TYPES[resource.rechargeOn]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -823,7 +935,10 @@ function ResourceRow({
         {current.value}/{resource.max} · {REST_TYPES[resource.rechargeOn]}
       </span>
       <span className="ml-auto">
-        <RemoveButton onRemove={() => onRemove(resource.id)} />
+        <RemoveButton
+          onRemove={() => onRemove(resource.id)}
+          confirm={`Remove ${resource.name}?`}
+        />
       </span>
     </li>
   );
@@ -834,9 +949,11 @@ function ResourceRow({
 export function ProficienciesSection({
   characterId,
   proficiencies,
+  canManage,
 }: {
   characterId: string;
   proficiencies: CharacterSheet["proficiencies"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -879,6 +996,44 @@ export function ProficienciesSection({
     }
   }
 
+  const body =
+    proficiencies.length === 0 ? (
+      <EmptyState text="No proficiencies yet." />
+    ) : (
+      <div className="flex flex-wrap gap-2">
+        {proficiencies.map((p) => (
+          <span
+            key={p.id}
+            className="flex items-center gap-1 rounded-md border py-1 pr-1 pl-2.5 text-sm"
+          >
+            <span>
+              {p.name}
+              <span className="text-muted-foreground ml-1 text-xs">
+                {p.type}
+              </span>
+            </span>
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(p.id)}
+                confirm={`Remove ${p.name}?`}
+              />
+            )}
+          </span>
+        ))}
+      </div>
+    );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Proficiencies</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
+  }
+
   return (
     <SectionCard
       title="Proficiencies"
@@ -917,26 +1072,7 @@ export function ProficienciesSection({
         </form>
       }
     >
-      {proficiencies.length === 0 ? (
-        <EmptyState text="No proficiencies yet." />
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {proficiencies.map((p) => (
-            <span
-              key={p.id}
-              className="flex items-center gap-1 rounded-md border py-1 pr-1 pl-2.5 text-sm"
-            >
-              <span>
-                {p.name}
-                <span className="text-muted-foreground ml-1 text-xs">
-                  {p.type}
-                </span>
-              </span>
-              <RemoveButton onRemove={() => onRemove(p.id)} />
-            </span>
-          ))}
-        </div>
-      )}
+      {body}
     </SectionCard>
   );
 }
@@ -946,9 +1082,11 @@ export function ProficienciesSection({
 export function ConditionsSection({
   characterId,
   conditions,
+  canManage,
 }: {
   characterId: string;
   conditions: CharacterSheet["conditions"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -1003,6 +1141,60 @@ export function ConditionsSection({
     }
   }
 
+  const body =
+    conditions.length === 0 ? (
+      <EmptyState text="No conditions." />
+    ) : (
+      <div className="flex flex-wrap gap-2">
+        {conditions.map((c) => (
+          <span
+            key={c.id}
+            className="flex items-center gap-1 rounded-md border py-1 pr-1 pl-2.5 text-sm"
+          >
+            {/* Conditions have no catalog table, so this is a local body
+                  rather than one of the shared catalog detail renderers. */}
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className="hover:bg-muted/60 focus-visible:ring-ring/50 -mx-1 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none"
+                  />
+                }
+              >
+                {c.name}
+                {c.level != null && ` ${c.level}`}
+              </PopoverTrigger>
+              <PopoverContent className="max-h-[65vh] overflow-y-auto">
+                <DetailHeader
+                  title={c.name}
+                  subtitle={c.level != null ? `Level ${c.level}` : undefined}
+                />
+                <DetailText text={c.notes ?? "No notes."} />
+              </PopoverContent>
+            </Popover>
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(c.id)}
+                confirm={`Remove ${c.name}?`}
+              />
+            )}
+          </span>
+        ))}
+      </div>
+    );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Conditions</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
+  }
+
   return (
     <SectionCard
       title="Conditions"
@@ -1052,42 +1244,7 @@ export function ConditionsSection({
         </form>
       }
     >
-      {conditions.length === 0 ? (
-        <EmptyState text="No conditions." />
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {conditions.map((c) => (
-            <span
-              key={c.id}
-              className="flex items-center gap-1 rounded-md border py-1 pr-1 pl-2.5 text-sm"
-            >
-              {/* Conditions have no catalog table, so this is a local body
-                  rather than one of the shared catalog detail renderers. */}
-              <Popover>
-                <PopoverTrigger
-                  render={
-                    <button
-                      type="button"
-                      className="hover:bg-muted/60 focus-visible:ring-ring/50 -mx-1 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none"
-                    />
-                  }
-                >
-                  {c.name}
-                  {c.level != null && ` ${c.level}`}
-                </PopoverTrigger>
-                <PopoverContent className="max-h-[65vh] overflow-y-auto">
-                  <DetailHeader
-                    title={c.name}
-                    subtitle={c.level != null ? `Level ${c.level}` : undefined}
-                  />
-                  <DetailText text={c.notes ?? "No notes."} />
-                </PopoverContent>
-              </Popover>
-              <RemoveButton onRemove={() => onRemove(c.id)} />
-            </span>
-          ))}
-        </div>
-      )}
+      {body}
     </SectionCard>
   );
 }

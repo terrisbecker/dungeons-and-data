@@ -15,6 +15,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 // Layout primitives for the add/remove sections on the character sheet and the
 // creature stat block: a card whose header toggles an inline form (no modal),
@@ -78,22 +88,63 @@ export function SectionCard({
   );
 }
 
-export function RemoveButton({ onRemove }: { onRemove: () => void }) {
+// `confirm`, when given, gates the removal behind a small dialog naming the
+// specific row (e.g. "Remove Longsword from inventory?") instead of firing
+// immediately — matches the confirm step every other destructive action in
+// the app already has (creature delete, location delete, catalog delete).
+export function RemoveButton({
+  onRemove,
+  confirm,
+}: {
+  onRemove: () => void | Promise<void>;
+  confirm?: string;
+}) {
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  async function run() {
+    setBusy(true);
+    await onRemove();
+    setBusy(false);
+    setOpen(false);
+  }
+
+  if (!confirm) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Remove"
+        disabled={busy}
+        onClick={run}
+      >
+        <XIcon />
+      </Button>
+    );
+  }
+
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Remove"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        await onRemove();
-        setBusy(false);
-      }}
-    >
-      <XIcon />
-    </Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={<Button variant="ghost" size="icon-sm" aria-label="Remove" />}
+      >
+        <XIcon />
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{confirm}</DialogTitle>
+          <DialogDescription>This cannot be undone.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="outline" />}>
+            Cancel
+          </DialogClose>
+          <Button onClick={run} disabled={busy}>
+            {busy ? "Removing…" : "Remove"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

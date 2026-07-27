@@ -91,7 +91,10 @@ export function EditableInventoryRow({
           onCommit={attuned.set}
           pending={attuned.pending}
         />
-        <RemoveButton onRemove={() => onRemove(row.id)} />
+        <RemoveButton
+          onRemove={() => onRemove(row.id)}
+          confirm={`Remove ${row.item.name} from inventory?`}
+        />
       </span>
     </li>
   );

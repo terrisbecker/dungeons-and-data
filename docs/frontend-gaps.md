@@ -121,13 +121,17 @@ Steps:
 1. **Add the predicate.** In `apps/web/src/app/(app)/characters/[id]/character-data.ts`
    (new file, same shape as `campaign-data.ts`):
    ```ts
-   export function canManageCharacter(me: MeResponse, sheet: CharacterSheet): boolean {
+   export function canManageCharacter(
+     me: MeResponse,
+     sheet: CharacterSheet,
+   ): boolean {
      return (
        me.systemRole === "ADMIN" ||
        (sheet.playerId !== null && sheet.playerId === me.id) ||
        (sheet.campaignId !== null &&
          me.memberships.some(
-           (m) => m.campaign.id === sheet.campaignId && m.role === "DUNGEON_MASTER",
+           (m) =>
+             m.campaign.id === sheet.campaignId && m.role === "DUNGEON_MASTER",
          ))
      );
    }
@@ -186,10 +190,10 @@ Steps:
    `DialogTrigger` for a small inline `Dialog`/`DialogContent` (reuse
    `apps/web/src/components/ui/dialog.tsx`, already imported in
    `delete-location-dialog.tsx`) with a title built from `confirm`, Cancel
-   +  Remove buttons, and the existing `busy` state gating the Remove
-   button. When `confirm` is omitted, fall back to the current
-   fire-immediately behavior (keeps low-stakes removes, if any are
-   intentionally kept snappy, opt-out-able).
+   - Remove buttons, and the existing `busy` state gating the Remove
+     button. When `confirm` is omitted, fall back to the current
+     fire-immediately behavior (keeps low-stakes removes, if any are
+     intentionally kept snappy, opt-out-able).
 2. **Pass a `confirm` string at each of the 22 call sites** — the message
    should name the specific row, e.g. in
    `character-sheet-catalog-sections.tsx`'s `InventorySection`:

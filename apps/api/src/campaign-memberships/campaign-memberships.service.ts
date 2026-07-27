@@ -6,6 +6,7 @@ import {
   countDms,
   createMembership,
   deleteMembership,
+  findMembershipByCampaignAndPlayer,
   findMembershipById,
   findMemberships,
   updateMembership,
@@ -52,7 +53,11 @@ async function assertNotLastDm(current: {
   role: CampaignRole;
 }): Promise<void> {
   if (current.role !== CampaignRole.DUNGEON_MASTER) return;
-  if ((await countDms(current.campaignId)) <= 1) throw conflict();
+  if ((await countDms(current.campaignId)) <= 1) {
+    throw conflict(
+      "This campaign needs at least one Dungeon Master — promote a co-DM first.",
+    );
+  }
 }
 
 export async function updateMembershipService(id: string, rawBody: unknown) {
@@ -83,6 +88,23 @@ export async function deleteMembershipService(id: string): Promise<void> {
   await assertNotLastDm(current);
   try {
     await deleteMembership(id);
+  } catch (error) {
+    mapPrismaError(error);
+  }
+}
+
+// Self-service "leave campaign": resolves the caller's own membership in the
+// campaign (never someone else's) and reuses the same ≥1-DM invariant a DM
+// removing a player already has to satisfy.
+export async function leaveMembershipService(
+  campaignId: string,
+  playerId: string,
+): Promise<void> {
+  const current = await findMembershipByCampaignAndPlayer(campaignId, playerId);
+  if (!current) throw notFound();
+  await assertNotLastDm(current);
+  try {
+    await deleteMembership(current.id);
   } catch (error) {
     mapPrismaError(error);
   }

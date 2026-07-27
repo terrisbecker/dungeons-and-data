@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import type { CharacterSheet } from "@dnd/shared";
-import { ApiRequestError, getCharacterSheet } from "@/lib/api";
+import type { CharacterSheet, MeResponse } from "@dnd/shared";
+import { ApiRequestError, getCharacterSheet, getMe } from "@/lib/api";
 import { CharacterSheetView } from "./character-sheet";
+import { canManageCharacter } from "./character-data";
 
 export default async function CharacterPage({
   params,
@@ -11,8 +12,9 @@ export default async function CharacterPage({
   const { id } = await params;
 
   let sheet: CharacterSheet;
+  let me: MeResponse;
   try {
-    sheet = await getCharacterSheet(id);
+    [sheet, me] = await Promise.all([getCharacterSheet(id), getMe()]);
   } catch (error) {
     if (error instanceof ApiRequestError) {
       // Token missing/expired at the API — clear it and bounce to login (a plain
@@ -23,5 +25,10 @@ export default async function CharacterPage({
     throw error;
   }
 
-  return <CharacterSheetView sheet={sheet} />;
+  return (
+    <CharacterSheetView
+      sheet={sheet}
+      canManage={canManageCharacter(me, sheet)}
+    />
+  );
 }

@@ -58,7 +58,13 @@ const SIZES: Record<string, string> = {
 
 // --- Main view -------------------------------------------------------------
 
-export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
+export function CharacterSheetView({
+  sheet,
+  canManage,
+}: {
+  sheet: CharacterSheet;
+  canManage: boolean;
+}) {
   const d = sheet.derived;
 
   const classLine = sheet.classes.length
@@ -115,21 +121,37 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
             characterId={sheet.id}
             inspiration={sheet.inspiration}
             experiencePoints={sheet.experiencePoints}
+            canManage={canManage}
           />
         </div>
       </div>
 
       <div className="grid gap-4">
-        <CombatSection characterId={sheet.id} sheet={sheet} derived={d} />
+        <CombatSection
+          characterId={sheet.id}
+          sheet={sheet}
+          derived={d}
+          canManage={canManage}
+        />
 
-        <AbilitiesSection characterId={sheet.id} sheet={sheet} derived={d} />
+        <AbilitiesSection
+          characterId={sheet.id}
+          sheet={sheet}
+          derived={d}
+          canManage={canManage}
+        />
 
-        <ClassesSection characterId={sheet.id} classes={sheet.classes} />
+        <ClassesSection
+          characterId={sheet.id}
+          classes={sheet.classes}
+          canManage={canManage}
+        />
 
         <SkillsSection
           characterId={sheet.id}
           skills={sheet.skills}
           skillModifiers={d.skills}
+          canManage={canManage}
         />
 
         {/* Spellcasting (computed save DC / attack) */}
@@ -159,31 +181,62 @@ export function CharacterSheetView({ sheet }: { sheet: CharacterSheet }) {
         <SpellSlotsSection
           characterId={sheet.id}
           spellSlots={sheet.spellSlots}
+          canManage={canManage}
         />
 
-        <SpellsSection characterId={sheet.id} spells={sheet.spells} />
+        <SpellsSection
+          characterId={sheet.id}
+          spells={sheet.spells}
+          canManage={canManage}
+        />
 
-        <ResourcesSection characterId={sheet.id} resources={sheet.resources} />
+        <ResourcesSection
+          characterId={sheet.id}
+          resources={sheet.resources}
+          canManage={canManage}
+        />
 
         <ConditionsSection
           characterId={sheet.id}
           conditions={sheet.conditions}
+          canManage={canManage}
         />
 
-        <FeaturesSection characterId={sheet.id} features={sheet.features} />
+        <FeaturesSection
+          characterId={sheet.id}
+          features={sheet.features}
+          canManage={canManage}
+        />
 
-        <FeatsSection characterId={sheet.id} feats={sheet.feats} />
+        <FeatsSection
+          characterId={sheet.id}
+          feats={sheet.feats}
+          canManage={canManage}
+        />
 
         <ProficienciesSection
           characterId={sheet.id}
           proficiencies={sheet.proficiencies}
+          canManage={canManage}
         />
 
-        <InventorySection characterId={sheet.id} inventory={sheet.inventory} />
+        <InventorySection
+          characterId={sheet.id}
+          inventory={sheet.inventory}
+          canManage={canManage}
+        />
 
-        <CoinSection characterId={sheet.id} sheet={sheet} />
+        <CoinSection
+          characterId={sheet.id}
+          sheet={sheet}
+          canManage={canManage}
+        />
 
-        <RoleplaySection characterId={sheet.id} sheet={sheet} />
+        <RoleplaySection
+          characterId={sheet.id}
+          sheet={sheet}
+          canManage={canManage}
+        />
       </div>
     </main>
   );

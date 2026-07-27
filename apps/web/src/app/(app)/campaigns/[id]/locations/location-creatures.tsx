@@ -143,6 +143,7 @@ export function LocationCreatures({
               {canManage && (
                 <RemoveButton
                   onRemove={() => onRemove(placement.creature.id)}
+                  confirm={`Remove ${placement.creature.name} from this location?`}
                 />
               )}
             </span>

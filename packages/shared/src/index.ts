@@ -54,6 +54,31 @@ export interface Campaign {
   }>;
 }
 
+// description is deliberately non-nullable here: updateCampaignService reads
+// it with optionalString (not nullableString), so an explicit null is a no-op
+// on the API, not a clear — send "" to blank it out instead.
+export interface UpdateCampaignInput {
+  name?: string;
+  description?: string;
+  status?: CampaignStatus;
+}
+
+// PATCH/DELETE /campaign-memberships/:id — mirrors the `select` in
+// campaign-memberships.queries.ts (a standalone membership row, unlike the
+// nested shapes above).
+export interface CampaignMembership {
+  id: string;
+  campaignId: string;
+  playerId: string;
+  role: CampaignRole;
+  joinedAt: string;
+  player: { id: string; username: string; displayName: string | null };
+}
+
+export interface UpdateMembershipInput {
+  role?: CampaignRole;
+}
+
 // A lean PlayerCharacter as returned by GET /characters (mirrors
 // characterListSelect in characters.queries.ts). alignment/size are enums on the
 // API, typed loosely here since the dashboard list only renders race/HP/AC.

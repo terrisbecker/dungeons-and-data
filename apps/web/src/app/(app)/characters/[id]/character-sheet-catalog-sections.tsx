@@ -13,6 +13,7 @@ import type {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox, EnumSelect, Field } from "@/components/form-fields";
 import {
   DetailBody,
@@ -22,7 +23,10 @@ import {
   FeatureDetail,
   SpellDetail,
 } from "@/components/catalog-detail";
-import { EditableInventoryRow } from "@/components/inventory-rows";
+import {
+  EditableInventoryRow,
+  ReadOnlyInventoryRow,
+} from "@/components/inventory-rows";
 import {
   deleteChild,
   deleteJoin,
@@ -57,9 +61,11 @@ const patchInventory = (id: string, body: unknown) =>
 export function InventorySection({
   characterId,
   inventory,
+  canManage,
 }: {
   characterId: string;
   inventory: CharacterSheet["inventory"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -122,6 +128,27 @@ export function InventorySection({
     () => (rows ? Object.fromEntries(rows.map((i) => [i.id, i.name])) : {}),
     [rows],
   );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Inventory</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {inventory.length === 0 ? (
+            <EmptyState text="No items yet." />
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {inventory.map((row) => (
+                <ReadOnlyInventoryRow key={row.id} row={row} />
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <SectionCard
@@ -203,9 +230,11 @@ export function InventorySection({
 export function SpellsSection({
   characterId,
   spells,
+  canManage,
 }: {
   characterId: string;
   spells: CharacterSheet["spells"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -271,6 +300,65 @@ export function SpellsSection({
     [rows],
   );
 
+  const body =
+    spells.length === 0 ? (
+      <EmptyState text="No spells yet." />
+    ) : (
+      <ul className="flex flex-col gap-1 text-sm">
+        {spells.map((s) => (
+          <li
+            key={s.spell.id}
+            className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+          >
+            <RowDetail
+              label={
+                <>
+                  {s.spell.name}
+                  <span className="text-muted-foreground ml-1 text-xs">
+                    {s.spell.level === 0 ? "Cantrip" : `Lvl ${s.spell.level}`}
+                    {s.prepared ? " · prepared" : ""}
+                  </span>
+                </>
+              }
+            >
+              <SpellDetail spell={s.spell} />
+              <DetailBody>
+                <DetailRow label="Known" value={s.known ? "Yes" : null} />
+                <DetailRow
+                  label="Prepared"
+                  value={
+                    s.alwaysPrepared
+                      ? "Always prepared"
+                      : s.prepared
+                        ? "Yes"
+                        : null
+                  }
+                />
+                <DetailRow label="From" value={s.sourceClass} />
+              </DetailBody>
+            </RowDetail>
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(s.spell.id)}
+                confirm={`Remove ${s.spell.name}?`}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Spells</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
+  }
+
   return (
     <SectionCard
       title="Spells"
@@ -328,47 +416,7 @@ export function SpellsSection({
         </form>
       }
     >
-      {spells.length === 0 ? (
-        <EmptyState text="No spells yet." />
-      ) : (
-        <ul className="flex flex-col gap-1 text-sm">
-          {spells.map((s) => (
-            <li
-              key={s.spell.id}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-            >
-              <RowDetail
-                label={
-                  <>
-                    {s.spell.name}
-                    <span className="text-muted-foreground ml-1 text-xs">
-                      {s.spell.level === 0 ? "Cantrip" : `Lvl ${s.spell.level}`}
-                      {s.prepared ? " · prepared" : ""}
-                    </span>
-                  </>
-                }
-              >
-                <SpellDetail spell={s.spell} />
-                <DetailBody>
-                  <DetailRow label="Known" value={s.known ? "Yes" : null} />
-                  <DetailRow
-                    label="Prepared"
-                    value={
-                      s.alwaysPrepared
-                        ? "Always prepared"
-                        : s.prepared
-                          ? "Yes"
-                          : null
-                    }
-                  />
-                  <DetailRow label="From" value={s.sourceClass} />
-                </DetailBody>
-              </RowDetail>
-              <RemoveButton onRemove={() => onRemove(s.spell.id)} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {body}
     </SectionCard>
   );
 }
@@ -378,9 +426,11 @@ export function SpellsSection({
 export function FeatsSection({
   characterId,
   feats,
+  canManage,
 }: {
   characterId: string;
   feats: CharacterSheet["feats"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -428,6 +478,54 @@ export function FeatsSection({
     [rows],
   );
 
+  const body =
+    feats.length === 0 ? (
+      <EmptyState text="No feats yet." />
+    ) : (
+      <ul className="flex flex-col gap-1 text-sm">
+        {feats.map((f) => (
+          <li
+            key={f.feat.id}
+            className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+          >
+            {/* The description lives in the popover now, so the row stays a
+                  single line however long the feat's rules text is. */}
+            <RowDetail
+              label={
+                <>
+                  <span className="font-medium">{f.feat.name}</span>
+                  {f.feat.prerequisite && (
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      {f.feat.prerequisite}
+                    </span>
+                  )}
+                </>
+              }
+            >
+              <FeatDetail feat={f.feat} />
+            </RowDetail>
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(f.feat.id)}
+                confirm={`Remove ${f.feat.name}?`}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Feats</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
+  }
+
   return (
     <SectionCard
       title="Feats"
@@ -460,36 +558,7 @@ export function FeatsSection({
         </form>
       }
     >
-      {feats.length === 0 ? (
-        <EmptyState text="No feats yet." />
-      ) : (
-        <ul className="flex flex-col gap-1 text-sm">
-          {feats.map((f) => (
-            <li
-              key={f.feat.id}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-            >
-              {/* The description lives in the popover now, so the row stays a
-                  single line however long the feat's rules text is. */}
-              <RowDetail
-                label={
-                  <>
-                    <span className="font-medium">{f.feat.name}</span>
-                    {f.feat.prerequisite && (
-                      <span className="text-muted-foreground ml-1 text-xs">
-                        {f.feat.prerequisite}
-                      </span>
-                    )}
-                  </>
-                }
-              >
-                <FeatDetail feat={f.feat} />
-              </RowDetail>
-              <RemoveButton onRemove={() => onRemove(f.feat.id)} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {body}
     </SectionCard>
   );
 }
@@ -499,9 +568,11 @@ export function FeatsSection({
 export function FeaturesSection({
   characterId,
   features,
+  canManage,
 }: {
   characterId: string;
   features: CharacterSheet["features"];
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -560,6 +631,53 @@ export function FeaturesSection({
     [rows],
   );
 
+  const body =
+    features.length === 0 ? (
+      <EmptyState text="No features yet." />
+    ) : (
+      <ul className="flex flex-col gap-1 text-sm">
+        {features.map((f) => (
+          <li
+            key={f.feature.id}
+            className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+          >
+            <RowDetail
+              label={
+                <>
+                  {f.feature.name}
+                  <span className="text-muted-foreground ml-1 text-xs">
+                    {FEATURE_SOURCES[f.feature.source]}
+                  </span>
+                </>
+              }
+            >
+              <FeatureDetail feature={f.feature} />
+              <DetailBody>
+                <DetailRow label="Notes" value={f.notes} />
+              </DetailBody>
+            </RowDetail>
+            {canManage && (
+              <RemoveButton
+                onRemove={() => onRemove(f.feature.id)}
+                confirm={`Remove ${f.feature.name}?`}
+              />
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Features</CardTitle>
+        </CardHeader>
+        <CardContent>{body}</CardContent>
+      </Card>
+    );
+  }
+
   return (
     <SectionCard
       title="Features"
@@ -603,35 +721,7 @@ export function FeaturesSection({
         </form>
       }
     >
-      {features.length === 0 ? (
-        <EmptyState text="No features yet." />
-      ) : (
-        <ul className="flex flex-col gap-1 text-sm">
-          {features.map((f) => (
-            <li
-              key={f.feature.id}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-            >
-              <RowDetail
-                label={
-                  <>
-                    {f.feature.name}
-                    <span className="text-muted-foreground ml-1 text-xs">
-                      {FEATURE_SOURCES[f.feature.source]}
-                    </span>
-                  </>
-                }
-              >
-                <FeatureDetail feature={f.feature} />
-                <DetailBody>
-                  <DetailRow label="Notes" value={f.notes} />
-                </DetailBody>
-              </RowDetail>
-              <RemoveButton onRemove={() => onRemove(f.feature.id)} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {body}
     </SectionCard>
   );
 }

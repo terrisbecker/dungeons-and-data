@@ -3,6 +3,7 @@ import type {
   ApiError,
   AuthResponse,
   Campaign,
+  CampaignMembership,
   CampaignRole,
   CharacterSheet,
   CharacterSummary,
@@ -16,6 +17,8 @@ import type {
   LocationRow,
   MeResponse,
   SpellCatalog,
+  UpdateCampaignInput,
+  UpdateMembershipInput,
 } from "@dnd/shared";
 import { getToken } from "./session";
 
@@ -96,6 +99,46 @@ export function joinCampaign(id: string): Promise<{
 }> {
   return serverFetch(`/campaigns/${encodeURIComponent(id)}/join`, {
     method: "POST",
+  });
+}
+
+export function updateCampaign(
+  id: string,
+  body: UpdateCampaignInput,
+): Promise<Campaign> {
+  return serverFetch<Campaign>(`/campaigns/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteCampaign(id: string): Promise<void> {
+  return serverFetch<void>(`/campaigns/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// Self-service leave (POST /campaigns/:id/leave) — seats/removes only the
+// caller, resolved from the token, so the id only identifies the campaign.
+export function leaveCampaign(id: string): Promise<void> {
+  return serverFetch<void>(`/campaigns/${encodeURIComponent(id)}/leave`, {
+    method: "POST",
+  });
+}
+
+export function updateMembership(
+  id: string,
+  body: UpdateMembershipInput,
+): Promise<CampaignMembership> {
+  return serverFetch<CampaignMembership>(
+    `/campaign-memberships/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+}
+
+export function deleteMembership(id: string): Promise<void> {
+  return serverFetch<void>(`/campaign-memberships/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
