@@ -41,10 +41,20 @@ export function createLocation(data: Prisma.LocationUncheckedCreateInput) {
   return prisma.location.create({ data, select: locationSelect });
 }
 
-export function findLocations() {
+export function findLocations(campaignId?: string) {
   return prisma.location.findMany({
+    where: campaignId ? { campaignId } : undefined,
     orderBy: { locationName: "asc" },
     select: locationSelect,
+  });
+}
+
+// Just the parent pointer — used to walk the hierarchy upward when checking for
+// cycles before re-parenting.
+export function findLocationParentId(id: string) {
+  return prisma.location.findUnique({
+    where: { id },
+    select: { parentId: true },
   });
 }
 

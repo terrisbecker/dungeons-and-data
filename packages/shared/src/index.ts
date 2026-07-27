@@ -71,6 +71,56 @@ export interface CharacterSummary {
   updatedAt: string;
 }
 
+// --- Locations -------------------------------------------------------------
+
+export type CreatureKind = "NPC" | "MONSTER";
+
+// The lightweight projection the API reuses for a location's parent/children
+// (locationSummarySelect in locations.queries.ts).
+export interface LocationSummary {
+  id: string;
+  locationName: string;
+  type: string;
+}
+
+// GET /locations (and the POST/PATCH responses) — mirrors locationSelect.
+// Named LocationRow rather than Location so it doesn't shadow the DOM global.
+export interface LocationRow {
+  id: string;
+  locationName: string;
+  description: string | null;
+  // Free text on purpose (realm, region, town, dungeon, …) — homebrew stays open.
+  type: string;
+  campaignId: string | null;
+  parentId: string | null;
+  parent: LocationSummary | null;
+  children: LocationSummary[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /locations/:id — locationDetailSelect adds the creatures placed here.
+export interface LocationDetail extends LocationRow {
+  creaturePlacements: Array<{
+    quantity: number;
+    notes: string | null;
+    creature: { id: string; name: string; kind: CreatureKind };
+  }>;
+}
+
+export interface CreateLocationInput {
+  locationName: string;
+  type: string;
+  description?: string | null;
+  parentId?: string | null;
+  campaignId?: string | null;
+}
+
+// A location never changes campaigns from the UI, so campaignId is create-only.
+export type UpdateLocationInput = Partial<
+  Omit<CreateLocationInput, "campaignId">
+>;
+
 // --- Character creation + sheet -------------------------------------------
 
 // The fixed 5e enum sets, mirrored from the Prisma schema as string unions.
@@ -566,6 +616,311 @@ export interface CharacterSheet {
     item: ItemCatalog;
   }>;
   derived: DerivedStats;
+}
+
+// --- Creatures (NPCs + monsters) -------------------------------------------
+
+// NPCs and monsters share one table discriminated by `kind`, so these types
+// cover both. Mirrors creatures.queries.ts.
+export type CreatureType =
+  | "ABERRATION"
+  | "BEAST"
+  | "CELESTIAL"
+  | "CONSTRUCT"
+  | "DRAGON"
+  | "ELEMENTAL"
+  | "FEY"
+  | "FIEND"
+  | "GIANT"
+  | "HUMANOID"
+  | "MONSTROSITY"
+  | "OOZE"
+  | "PLANT"
+  | "UNDEAD";
+
+export type StatBlockEntryCategory =
+  | "TRAIT"
+  | "ACTION"
+  | "BONUS_ACTION"
+  | "REACTION"
+  | "LEGENDARY_ACTION"
+  | "MYTHIC_ACTION"
+  | "LAIR_ACTION"
+  | "REGIONAL_EFFECT";
+
+export type DamageModifierKind = "VULNERABILITY" | "RESISTANCE" | "IMMUNITY";
+
+// The creature counterpart of DerivedStats — no totalLevel and no spellcasting
+// block (a creature's proficiency bonus comes from its CR, not class levels),
+// so it is deliberately a separate type.
+export interface CreatureDerivedStats {
+  proficiencyBonus: number;
+  initiative: number;
+  abilityModifiers: Record<Ability, number>;
+  savingThrows: Record<Ability, number>;
+  skills: Record<Skill, number>;
+  passivePerception: number;
+  passiveInvestigation: number;
+  passiveInsight: number;
+}
+
+// GET /creatures — creatureListSelect. campaignId tells a campaign-owned
+// creature from a shared-catalog one (null).
+export interface CreatureSummary {
+  id: string;
+  kind: CreatureKind;
+  name: string;
+  size: CreatureSize;
+  creatureType: CreatureType | null;
+  alignment: Alignment | null;
+  armorClass: number;
+  hitPoints: number;
+  challengeRating: number | null;
+  campaignId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Every stored Creature scalar (creatureScalarSelect). challengeRating is a
+// Prisma Decimal in the DB but always a plain number over the wire.
+export interface CreatureScalars {
+  id: string;
+  kind: CreatureKind;
+  name: string;
+  description: string | null;
+
+  size: CreatureSize;
+  creatureType: CreatureType | null;
+  typeTags: string[];
+  alignment: Alignment | null;
+  alignmentNote: string | null;
+
+  armorClass: number;
+  armorClassNote: string | null;
+  hitPoints: number;
+  hitDice: string | null;
+
+  speed: number;
+  flySpeed: number | null;
+  swimSpeed: number | null;
+  climbSpeed: number | null;
+  burrowSpeed: number | null;
+  hover: boolean;
+
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+
+  strengthSaveProf: boolean;
+  dexteritySaveProf: boolean;
+  constitutionSaveProf: boolean;
+  intelligenceSaveProf: boolean;
+  wisdomSaveProf: boolean;
+  charismaSaveProf: boolean;
+
+  darkvision: number | null;
+  blindsight: number | null;
+  blindBeyond: boolean;
+  tremorsense: number | null;
+  truesight: number | null;
+
+  languages: string | null;
+  conditionImmunities: string[];
+
+  challengeRating: number | null;
+  experiencePoints: number | null;
+  legendaryActionsPerRound: number | null;
+  hasLair: boolean;
+
+  environment: string[];
+  source: string | null;
+  occupation: string | null;
+  faction: string | null;
+  race: string | null;
+
+  campaignId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// GET /creatures/:id (and the PATCH response) — scalars + skills + derived.
+export interface CreatureCore extends CreatureScalars {
+  skills: Array<{ id: string; skill: Skill; proficiency: SkillProficiency }>;
+  derived: CreatureDerivedStats;
+}
+
+// GET /creatures/:id/sheet — the full stat block. Named StatBlock rather than
+// Sheet so it never reads as the character sheet.
+export interface CreatureStatBlock extends CreatureCore {
+  entries: Array<{
+    id: string;
+    category: StatBlockEntryCategory;
+    name: string;
+    description: string;
+    sortOrder: number;
+    legendaryCost: number | null;
+  }>;
+  damageModifiers: Array<{
+    id: string;
+    kind: DamageModifierKind;
+    damageType: DamageType | null;
+    note: string | null;
+  }>;
+  // The full catalog projection, like the character sheet's — the stat block
+  // renders an item's whole detail popover without a second request.
+  inventory: Array<{
+    id: string;
+    quantity: number;
+    equipped: boolean;
+    attuned: boolean;
+    item: ItemCatalog;
+  }>;
+  placements: Array<{
+    quantity: number;
+    notes: string | null;
+    location: LocationSummary;
+  }>;
+}
+
+// POST /creatures. Everything the API does not require carries a default.
+export interface CreateCreatureInput {
+  kind: CreatureKind;
+  name: string;
+  armorClass: number;
+  hitPoints: number;
+
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+
+  description?: string | null;
+  size?: CreatureSize;
+  creatureType?: CreatureType | null;
+  typeTags?: string[];
+  alignment?: Alignment | null;
+  alignmentNote?: string | null;
+  armorClassNote?: string | null;
+  hitDice?: string | null;
+
+  speed?: number;
+  flySpeed?: number | null;
+  swimSpeed?: number | null;
+  climbSpeed?: number | null;
+  burrowSpeed?: number | null;
+  hover?: boolean;
+
+  strengthSaveProf?: boolean;
+  dexteritySaveProf?: boolean;
+  constitutionSaveProf?: boolean;
+  intelligenceSaveProf?: boolean;
+  wisdomSaveProf?: boolean;
+  charismaSaveProf?: boolean;
+
+  darkvision?: number | null;
+  blindsight?: number | null;
+  blindBeyond?: boolean;
+  tremorsense?: number | null;
+  truesight?: number | null;
+
+  languages?: string | null;
+  conditionImmunities?: string[];
+
+  challengeRating?: number | null;
+  experiencePoints?: number | null;
+  legendaryActionsPerRound?: number | null;
+  hasLair?: boolean;
+
+  environment?: string[];
+  source?: string | null;
+  occupation?: string | null;
+  faction?: string | null;
+  race?: string | null;
+
+  campaignId?: string | null;
+}
+
+// PATCH /creatures/:id — every field is optional, including the ones create
+// requires. campaignId moves the creature between a campaign and the catalog.
+export type UpdateCreatureInput = Partial<CreateCreatureInput>;
+
+// --- Creature children -----------------------------------------------------
+// The standalone child endpoints echo creatureId back; the stat-block read
+// omits it (the parent is implied).
+
+export interface CreatureSkillRow {
+  id: string;
+  creatureId: string;
+  skill: Skill;
+  proficiency: SkillProficiency;
+}
+
+export interface CreatureSkillInput {
+  creatureId: string;
+  skill: Skill;
+  proficiency?: SkillProficiency;
+}
+
+export interface StatBlockEntryRow {
+  id: string;
+  creatureId: string;
+  category: StatBlockEntryCategory;
+  name: string;
+  description: string;
+  sortOrder: number;
+  legendaryCost: number | null;
+}
+
+export interface StatBlockEntryInput {
+  creatureId: string;
+  category: StatBlockEntryCategory;
+  name: string;
+  description: string;
+  sortOrder?: number;
+  legendaryCost?: number | null;
+}
+
+export interface CreatureDamageModifierRow {
+  id: string;
+  creatureId: string;
+  kind: DamageModifierKind;
+  damageType: DamageType | null;
+  note: string | null;
+}
+
+export interface CreatureDamageModifierInput {
+  creatureId: string;
+  kind: DamageModifierKind;
+  damageType?: DamageType | null;
+  note?: string | null;
+}
+
+// CreaturePlacement is keyed on (creatureId, locationId) — it has no id.
+export interface CreaturePlacementRow {
+  creatureId: string;
+  locationId: string;
+  quantity: number;
+  notes: string | null;
+  creature: { id: string; name: string; kind: CreatureKind };
+  location: LocationSummary;
+}
+
+export interface CreaturePlacementInput {
+  creatureId: string;
+  locationId: string;
+  quantity?: number;
+  notes?: string | null;
+}
+
+// The key pair is immutable — only these two travel on PATCH.
+export interface UpdateCreaturePlacementInput {
+  quantity?: number;
+  notes?: string | null;
 }
 
 // The API's generic error body: { "error": "…" }.

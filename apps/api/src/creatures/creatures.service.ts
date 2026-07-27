@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { notFound } from "../http/http-error.js";
 import { mapPrismaError } from "../http/prisma-errors.js";
+import { flattenItem } from "../items/items.service.js";
 import {
   asRecord,
   optionalBoolean,
@@ -29,6 +30,7 @@ import {
 } from "./creatures.derived.js";
 import {
   createCreature,
+  type CreatureListFilter,
   deleteCreature,
   findCreatureCore,
   findCreatureSheet,
@@ -146,8 +148,9 @@ export async function createCreatureService(rawBody: unknown) {
   }
 }
 
-export function listCreaturesService() {
-  return findCreatures();
+export async function listCreaturesService(filter?: CreatureListFilter) {
+  const rows = await findCreatures(filter);
+  return rows.map(normalizeCreature);
 }
 
 // Core read: creature + skills + the computed derived block.
@@ -165,7 +168,15 @@ export async function getCreatureSheetService(id: string) {
   if (!creature) {
     throw notFound();
   }
-  return withDerived(creature);
+  // The joined item rows carry the 1:1 weapon/armor satellites; fold them in so
+  // `inventory[].item` is the same flat shape GET /items returns.
+  return withDerived({
+    ...creature,
+    inventory: creature.inventory.map((row) => ({
+      ...row,
+      item: flattenItem(row.item),
+    })),
+  });
 }
 
 export async function updateCreatureService(id: string, rawBody: unknown) {

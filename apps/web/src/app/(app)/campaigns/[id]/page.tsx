@@ -1,27 +1,48 @@
-import { notFound, redirect } from "next/navigation";
-import type { Campaign } from "@dnd/shared";
-import { ApiRequestError, getCampaign } from "@/lib/api";
-import { CampaignWorkspace } from "./campaign-workspace";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { loadCampaign } from "./campaign-data";
+import { InviteCard } from "./invite-card";
 
-export default async function CampaignPage({
+export default async function CampaignOverviewPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const campaign = await loadCampaign(id);
 
-  let campaign: Campaign;
-  try {
-    campaign = await getCampaign(id);
-  } catch (error) {
-    if (error instanceof ApiRequestError) {
-      // Token missing/expired at the API — clear it and bounce to login (a plain
-      // redirect would loop against the proxy, which still sees the cookie).
-      if (error.status === 401) redirect("/api/auth/logout");
-      if (error.status === 404) notFound();
-    }
-    throw error;
-  }
+  return (
+    <div className="mx-auto grid w-full max-w-2xl gap-4">
+      <InviteCard campaignId={campaign.id} />
 
-  return <CampaignWorkspace campaign={campaign} />;
+      <Card>
+        <CardHeader>
+          <CardTitle>Players</CardTitle>
+          <CardDescription>
+            {campaign.memberships.length} member(s) in this campaign.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {campaign.memberships.map((m) => (
+            <div
+              key={m.id}
+              className="flex items-center justify-between rounded-md border p-3"
+            >
+              <span className="font-medium">
+                {m.player.displayName ?? m.player.username}
+              </span>
+              <span className="text-muted-foreground text-sm">
+                {m.role === "DUNGEON_MASTER" ? "Dungeon Master" : "Player"}
+              </span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

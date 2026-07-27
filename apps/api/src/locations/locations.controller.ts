@@ -12,8 +12,12 @@ export async function postLocation(req: Request, res: Response) {
   res.status(201).json(await createLocationService(req.body));
 }
 
-export async function getLocations(_req: Request, res: Response) {
-  res.json(await listLocationsService());
+export async function getLocations(req: Request, res: Response) {
+  const campaignId =
+    typeof req.query.campaignId === "string"
+      ? requireUuid(req.query.campaignId)
+      : undefined;
+  res.json(await listLocationsService(campaignId));
 }
 
 export async function getLocation(req: Request, res: Response) {

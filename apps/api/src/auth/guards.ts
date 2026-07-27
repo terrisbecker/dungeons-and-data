@@ -118,19 +118,23 @@ export const guardCreatureCreate = guard((auth, req) =>
   ),
 );
 
-export const guardCreatureByParamId = guard((auth, req) =>
-  assertCanWriteCreature(auth, requireUuid(req.params.id)),
-);
+export const guardCreatureByParamId = guard(async (auth, req) => {
+  await assertCanWriteCreature(auth, requireUuid(req.params.id));
+  // A PATCH may also *move* the creature to another campaign (or into the
+  // shared catalog). Authorize the target scope too, exactly as the location
+  // guard below does. DELETE shares this guard and carries no body.
+  if (req.body === undefined || req.body === null) return;
+  const target = optionalUuidField(asRecord(req.body), "campaignId");
+  if (target !== undefined) {
+    await assertCanWriteCampaignScopedCreate(auth, target);
+  }
+});
 
 export const guardCreatureByBody = guard((auth, req) =>
   assertCanWriteCreature(
     auth,
     requireUuidField(asRecord(req.body), "creatureId"),
   ),
-);
-
-export const guardCreatureByParamCreatureId = guard((auth, req) =>
-  assertCanWriteCreature(auth, requireUuid(req.params.creatureId)),
 );
 
 function guardCreatureChild(
@@ -153,6 +157,23 @@ export const guardCreatureDamageModifierByParam = guardCreatureChild(
   creatureIdOfDamageModifier,
 );
 
+// --- Creature placements ---------------------------------------------------
+// A placement straddles two scopes, so BOTH ends are authorized: the creature
+// (which may be a shared-catalog row any DM can write) and the location it is
+// dropped into. Checking only the creature would let a DM place a shared
+// monster inside another campaign's world.
+
+export const guardCreaturePlacementCreate = guard(async (auth, req) => {
+  const body = asRecord(req.body);
+  await assertCanWriteCreature(auth, requireUuidField(body, "creatureId"));
+  await assertCanWriteLocation(auth, requireUuidField(body, "locationId"));
+});
+
+export const guardCreaturePlacementByParams = guard(async (auth, req) => {
+  await assertCanWriteCreature(auth, requireUuid(req.params.creatureId));
+  await assertCanWriteLocation(auth, requireUuid(req.params.locationId));
+});
+
 // --- Locations -------------------------------------------------------------
 
 export const guardLocationCreate = guard((auth, req) =>
@@ -162,9 +183,19 @@ export const guardLocationCreate = guard((auth, req) =>
   ),
 );
 
-export const guardLocationByParamId = guard((auth, req) =>
-  assertCanWriteLocation(auth, requireUuid(req.params.id)),
-);
+export const guardLocationByParamId = guard(async (auth, req) => {
+  await assertCanWriteLocation(auth, requireUuid(req.params.id));
+  // A PATCH may also *move* the location to another campaign. The check above
+  // only covers the campaign it currently belongs to, so authorize the target
+  // scope too — otherwise a DM could push their location into someone else's
+  // campaign. DELETE shares this guard and carries no body, hence the presence
+  // check.
+  if (req.body === undefined || req.body === null) return;
+  const target = optionalUuidField(asRecord(req.body), "campaignId");
+  if (target !== undefined) {
+    await assertCanWriteCampaignScopedCreate(auth, target);
+  }
+});
 
 // --- Inventory items (polymorphic owner) -----------------------------------
 

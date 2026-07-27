@@ -1,35 +1,10 @@
 "use client";
 
-import { toast } from "sonner";
+import { send } from "@/lib/mutate";
 
-// Every sheet mutation goes through the BFF (`/api/…`), which attaches the JWT
-// from the httpOnly cookie — the token never reaches the browser. All helpers
-// return a boolean and own their error toast, so callers only handle success.
-
-async function send(
-  url: string,
-  method: string,
-  body: unknown,
-  fallback: string,
-): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      method,
-      headers:
-        body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const parsed = await res.json().catch(() => null);
-      toast.error(parsed?.error ?? fallback);
-      return false;
-    }
-    return true;
-  } catch {
-    toast.error("Could not reach the server");
-    return false;
-  }
-}
+// The character sheet's write surface, one helper per BFF endpoint it uses.
+// `send` owns the error toast and returns a boolean, so callers only handle
+// success.
 
 export function postChild(topic: string, body: unknown): Promise<boolean> {
   return send(

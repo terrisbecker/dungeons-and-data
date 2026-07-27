@@ -30,6 +30,31 @@ export function Field({
   );
 }
 
+// A plain labelled checkbox for the in-card add forms (equipped/attuned and
+// friends). The inline *editors* live in editable-fields.tsx — this one is
+// uncontrolled-by-the-server form state, not a committed field.
+export function Checkbox({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        className="accent-primary size-4"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
+
 // A <Select> driven by a plain `{ value: label }` map. The base-ui Select
 // callback is `(value: string | null) => void`; we narrow it to string here so
 // callers get a simple `(value: string) => void`.

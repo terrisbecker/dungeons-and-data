@@ -12,6 +12,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { send } from "@/lib/mutate";
 
 // --- Fetch helpers ---------------------------------------------------------
 
@@ -35,29 +36,6 @@ export async function deleteCatalog(
   id: string,
 ): Promise<boolean> {
   return send(`/api/catalog/${topic}/${id}`, "DELETE");
-}
-
-async function send(
-  url: string,
-  method: string,
-  body?: unknown,
-): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: body ? { "content-type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      const parsed = await res.json().catch(() => null);
-      toast.error(parsed?.error ?? "Something went wrong");
-      return false;
-    }
-    return true;
-  } catch {
-    toast.error("Could not reach the server");
-    return false;
-  }
 }
 
 // The detail-popover building blocks and the four per-catalog detail bodies now

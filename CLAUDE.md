@@ -62,7 +62,7 @@ Backend-only workspace scripts (`build`/`start`/`lint:fix`) run with
 `@check`): from `apps/api/`, `npx prisma migrate dev --name <name> --create-only`,
 hand-edit the generated `migration.sql`, then `npx prisma migrate dev` to apply.
 
-## Current state (as of 2026-07-24)
+## Current state (as of 2026-07-25)
 
 Data model complete; the full backend layered stack for **all
 PlayerCharacter-related data** and **all Creature (NPC/Monster) + Location data**
@@ -70,10 +70,11 @@ is implemented, plus a **JWT auth + role-based authorization** layer and the
 `Player`/`Campaign`/`CampaignMembership` CRUD that backs it. The repo is now a
 **full-stack npm-workspaces monorepo**: the backend lives under `apps/api/`, a
 Next.js frontend (`apps/web/`) now covers the **auth slice, a dashboard, and
-campaign + character management** (character creation and an interactive
-character sheet), and `packages/shared` holds the type-only API contract.
+campaign + character + world management** (character creation and an interactive
+character sheet; campaign locations and creatures, including placing creatures
+at locations), and `packages/shared` holds the type-only API contract.
 Everything reaches the API through a BFF with an httpOnly-cookie session.
-Working on branch `frontend/character-creation-wizard`.
+Working on branch `campaign-db/locations`.
 
 **Implemented:**
 
@@ -176,16 +177,28 @@ Working on branch `frontend/character-creation-wizard`.
     computed `derived` block, what `PATCH` also returns), and
     `GET /creatures/:id/sheet` is the full **stat block** that additionally
     joins stat-block entries, damage modifiers, inventory, and placements. The
-    service normalizes `challengeRating` (Prisma `Decimal`) to a plain number.
+    service normalizes `challengeRating` (Prisma `Decimal`) to a plain number on
+    **every** read, the list included. The list read filters by `?campaignId`,
+    `?includeShared` (fold in the null-campaign catalog rows) and `?kind`.
     See `docs/creature-stat-block.md`.
   - Owned children (single `id` PK, `/topic/:id`, list by `?creatureId`):
     `creature-skills/`, `stat-block-entries/`, `creature-damage-modifiers/`.
   - Composite-key join (`/creature-placements/:creatureId/:locationId`):
     `creature-placements/` — carries `quantity`/`notes`, so it keeps PATCH;
-    lists by `?creatureId` **or** `?locationId`.
+    lists by `?creatureId` **or** `?locationId`. A placement straddles two
+    scopes, so its guards authorize **both** ends (the creature and the
+    location) — otherwise a DM could drop a shared monster into someone else's
+    campaign. `guardCreatureByParamId` likewise re-authorizes a `campaignId`
+    move, mirroring `guardLocationByParamId`.
 - **Location CRUD** (`locations/`) — standalone catalog with the self-nesting
   hierarchy; the detail read (`GET /locations/:id`) includes `parent`/`children`
-  summaries and the creatures placed there.
+  summaries and the creatures placed there. The list read filters by
+  `?campaignId` (same shape as `GET /characters?playerId`); the frontend fetches
+  a campaign's whole flat list once and derives the tree client-side.
+  `description`/`parentId` are **nullable on PATCH** (`nullableString` /
+  `nullableUuidField`, so an explicit `null` clears them and a location can be
+  promoted back to a root), and re-parenting is refused when it would create a
+  cycle (service-layer invariant, walks up from the proposed parent → 400).
 - **Seed + docs:** `prisma/seed.ts` populates **every table** (re-runnable): the
   catalog rows, 5 fully-populated test characters, a nested `Location` hierarchy
   (realm → region → town/dungeon → building), and 5 `Creature`s (2 NPCs, 3
@@ -207,8 +220,50 @@ Working on branch `frontend/character-creation-wizard`.
   - **Dashboard** (`(app)/dashboard`): reads `/auth/me` + the player's
     characters; lists campaign memberships and characters, with a
     **create-campaign** dialog and a **New character** link.
-  - **Campaign workspace** (`(app)/campaigns/[id]`): a sidebar-shell scaffold
-    (the nav items are still placeholders).
+  - **Campaign workspace** (`(app)/campaigns/[id]`): `layout.tsx` fetches the
+    campaign (via a `cache()`d `getCampaign`, shared with the pages under it) and
+    renders `campaign-workspace.tsx`, a sidebar shell that takes `children`. Each
+    nav item is a real route — Overview (`page.tsx`, the invite code + roster),
+    **Locations**, and `characters`/`encounters`/`settings` stubs; `isActive`
+    comes from `usePathname()` so a nav item stays lit while drilled into a
+    sub-route.
+  - **Campaign locations** (`(app)/campaigns/[id]/locations`): a drill-down
+    browser over the `Location` hierarchy. Both the roots page and
+    `[locationId]/page.tsx` load the campaign's **whole flat list** once
+    (`listLocations(campaignId)`) and derive the breadcrumb, the current level's
+    children, and the parent picker from it via the pure helpers in
+    `location-tree.ts` (every walk carries a `visited` set — pre-existing rows
+    predate the API's cycle check). The detail page additionally reads
+    `GET /locations/:id` for the creatures placed there, and **404s when
+    `campaignId` doesn't match the URL** (API reads are open to any authed user).
+    `locations-browser.tsx` stays a **server component** composing three client
+    dialogs: create/edit (`location-form-dialog.tsx` — one dialog for both, with
+    the edited location and its descendants excluded from the parent options) and
+    a delete confirm that spells out both cascade behaviours (children are
+    orphaned to the top level, creature placements are removed). The location's
+    **"Creatures here"** list is a managed section (`location-creatures.tsx`):
+    add/remove placements with a lazy-loaded creature picker. Writes are
+    DM-or-Admin only (`campaign-data.ts` `canManageCampaign` decides what to
+    render; the API guards still enforce it).
+  - **Campaign creatures** (`(app)/campaigns/[id]/creatures`): the bestiary —
+    the campaign's own creatures plus the shared catalog ones (null
+    `campaignId`), in two sections. The browser and its `?kind`/`?scope` filter
+    pills are **server components** (the filters are `<Link>`s, so a filtered
+    view is shareable and there is no client state). `new/creature-wizard.tsx`
+    mirrors the character wizard (Identity → Abilities → Defense → Senses &
+    Challenge → Review) and captures **only the main `Creature` row**, with a
+    "Belongs to" step choosing this campaign or the shared bestiary.
+    `[creatureId]/creature-stat-block.tsx` is a **server component** composing
+    client sections: inline editing of every stored scalar (including `name`,
+    which the creature API accepts on PATCH — unlike the character one), add /
+    remove for skills and damage modifiers, add / **edit** / remove for
+    stat-block entries grouped in Monster Manual order, a "Where it appears"
+    placements section, and a fully managed **inventory** (lazy-loaded item
+    picker to add, per-row remove, and inline editing of
+    `quantity`/`equipped`/`attuned` — the same `useOptimisticField` treatment the
+    character sheet gives its scalars). `text[]` columns are edited
+    as one comma-separated line; challenge rating rides the text editor so it
+    can be written `1/4` (`parseChallengeRating` in `lib/creature-labels.ts`).
   - **Character creation** (`(app)/characters/new`): a wizard that captures
     **only the main `PlayerCharacter` row** — Identity → Abilities → Combat →
     Roleplay → Review. It deliberately does **not** collect satellite-table data;
@@ -227,7 +282,12 @@ Working on branch `frontend/character-creation-wizard`.
       every non-calculated scalar on the main row (HP/AC, ability scores,
       speeds, senses, coin, XP, inspiration, save proficiencies, the roleplay
       boxes) is edited in place: click the value, Enter/blur saves, Escape
-      reverts. Backed by `src/hooks/use-optimistic-field.ts`, which renders a
+      reverts. **Inventory rows** are editable the same way
+      (`quantity`/`equipped`/`attuned`) via the shared
+      `components/inventory-rows.tsx` — the identical component the creature
+      stat block renders, since `InventoryItem`'s owner is polymorphic and only
+      the BFF topic route differs. Backed by
+      `src/hooks/use-optimistic-field.ts`, which renders a
       draft immediately and serializes+coalesces writes per field. Derived
       values stay read-only. See `docs/frontend.md`.
     - **Detail popovers** — catalog-backed rows and conditions open a
@@ -239,9 +299,24 @@ Working on branch `frontend/character-creation-wizard`.
     rollback, injecting `playerId` server-side; `[id]` PATCH for the sheet's
     inline edits of the main row); `character-children/[topic]` (POST +
     `[id]` PATCH/DELETE + `[id]/[otherId]` DELETE — an **allowlisted** proxy to
-    the owned-child API endpoints the sheet uses); and `catalog/[topic]`
-    (GET/POST + `[id]` PATCH/DELETE). The API's own guards enforce ownership on
-    every one.
+    the owned-child API endpoints the sheet uses); `catalog/[topic]`
+    (GET/POST + `[id]` PATCH/DELETE); `locations` (GET/POST + `[id]`
+    PATCH/DELETE); `creatures` (GET/POST + `[id]` PATCH/DELETE);
+    `creature-children/[topic]` (POST + `[id]` PATCH/DELETE — allowlisted the
+    same way, and the allowlist includes `inventory-items` so creature-owned
+    loot rides the same proxy); and `creature-placements` (POST +
+    `[creatureId]/[locationId]` PATCH/DELETE, the composite key as two
+    segments). The API's own guards enforce ownership on every one.
+  - **Shared client pieces** (promoted out of the character-sheet folder so the
+    creature stat block reuses them): `components/editable-fields.tsx` (the
+    inline editors), `components/section-card.tsx` (the add/remove card
+    scaffold, plus `RowDetail` — the click-to-open catalog popover — and
+    `CatalogHint`), `components/form-fields.tsx` (`Field`/`EnumSelect`/
+    `Checkbox`), `components/inventory-rows.tsx` (the editable + read-only
+    InventoryItem rows both sheets render), `lib/mutate.ts` (the self-toasting
+    `send`), `lib/skills.ts`,
+    `lib/creature-labels.ts`, and `hooks/use-lazy-list.ts` (pickers that fetch
+    on first open).
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -269,8 +344,12 @@ Working on branch `frontend/character-creation-wizard`.
   catalog **join** rows are add/remove only (no editing `prepared` on a spell or
   `notes` on a feature — that needs PATCH on the `[id]/[otherId]` BFF route,
   excluding `character-feats`, which is a pure join with no API PATCH); the
-  campaign-workspace sidebar nav is a non-functional placeholder; and
-  Creature/Location data has no frontend yet.
+  campaign workspace's `characters`/`encounters`/`settings` routes are
+  placeholders (a campaign-wide roster needs `GET /characters` to filter by
+  `campaignId`, which it doesn't); and a placement's `quantity`/`notes` can be set on create
+  and removed, but not edited afterwards (the API has PATCH on
+  `/creature-placements/:creatureId/:locationId`, and the BFF route is already
+  wired — only the UI control is missing).
 - **Sheet write semantics:** slot/resource writes send an absolute value, so two
   people spending the same slot is last-write-wins (atomic `{ increment }` would
   need a new API contract). `PATCH /characters/:id` bounds `currentHitPoints`

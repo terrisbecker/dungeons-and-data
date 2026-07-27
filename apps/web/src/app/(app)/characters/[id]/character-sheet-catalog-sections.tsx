@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type {
@@ -13,143 +13,46 @@ import type {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { EnumSelect, Field } from "@/components/form-fields";
+import { Checkbox, EnumSelect, Field } from "@/components/form-fields";
 import {
   DetailBody,
   DetailRow,
   FEATURE_SOURCES,
   FeatDetail,
   FeatureDetail,
-  ItemDetail,
   SpellDetail,
 } from "@/components/catalog-detail";
+import { EditableInventoryRow } from "@/components/inventory-rows";
 import {
   deleteChild,
   deleteJoin,
+  patchChild,
   postChild,
 } from "./character-sheet-mutations";
 import {
+  CatalogHint,
   EmptyState,
   FormButtons,
   RemoveButton,
+  RowDetail,
   SectionCard,
-} from "./character-sheet-sections";
+} from "@/components/section-card";
+import { useLazyList } from "@/hooks/use-lazy-list";
 
 // --- Shared helpers --------------------------------------------------------
-
-// Click-to-open detail for a catalog-backed row. Only the label is the trigger,
-// so the row's Remove button doesn't end up nested inside a button. Wider than
-// the primitive's default because item and spell descriptions are long.
-function RowDetail({
-  label,
-  children,
-}: {
-  label: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            className="hover:bg-muted/60 focus-visible:ring-ring/50 -mx-1 rounded px-1 text-left focus-visible:ring-2 focus-visible:outline-none"
-          />
-        }
-      >
-        {label}
-      </PopoverTrigger>
-      <PopoverContent className="max-h-[65vh] w-96 overflow-y-auto">
-        {children}
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 // Lazy-loads a catalog the first time a section opens, so viewing a sheet
 // doesn't fetch every catalog up front.
 function useLazyCatalog<T>(topic: string) {
-  const [rows, setRows] = useState<T[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const startedRef = useRef(false);
-
-  // Fires at most once (per mount), so re-opening the section doesn't refetch.
-  const load = useCallback(async () => {
-    if (startedRef.current) return;
-    startedRef.current = true;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/catalog/${topic}`);
-      if (res.ok) {
-        setRows((await res.json()) as T[]);
-      } else {
-        toast.error("Could not load catalog");
-        setRows([]);
-      }
-    } catch {
-      toast.error("Could not reach the server");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [topic]);
-
-  return { rows, loading, load };
-}
-
-const CHECKBOX = "accent-primary size-4";
-
-function Checkbox({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-sm">
-      <input
-        type="checkbox"
-        className={CHECKBOX}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      {label}
-    </label>
-  );
-}
-
-// Shared empty/loading hint shown inside a picker form.
-function CatalogHint({
-  loading,
-  empty,
-  noun,
-}: {
-  loading: boolean;
-  empty: boolean;
-  noun: string;
-}) {
-  if (loading) {
-    return <p className="text-muted-foreground text-sm">Loading catalog…</p>;
-  }
-  if (empty) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No {noun} in the catalog yet — a DM can add them under Catalogs.
-      </p>
-    );
-  }
-  return null;
+  return useLazyList<T>(`/api/catalog/${topic}`, "Could not load catalog");
 }
 
 // --- Inventory -------------------------------------------------------------
+
+// The rows themselves live in components/inventory-rows.tsx — the creature stat
+// block renders the identical thing against the same endpoint.
+const patchInventory = (id: string, body: unknown) =>
+  patchChild("inventory-items", id, body);
 
 export function InventorySection({
   characterId,
@@ -280,54 +183,14 @@ export function InventorySection({
       {inventory.length === 0 ? (
         <EmptyState text="No items yet." />
       ) : (
-        <ul className="flex flex-col gap-1 text-sm">
+        <ul className="flex flex-col gap-1">
           {inventory.map((row) => (
-            <li
+            <EditableInventoryRow
               key={row.id}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
-            >
-              <RowDetail
-                label={
-                  <>
-                    {row.item.name}
-                    {row.quantity > 1 && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        ×{row.quantity}
-                      </span>
-                    )}
-                    <span className="text-muted-foreground ml-1 text-xs">
-                      {[
-                        row.equipped ? "equipped" : null,
-                        row.attuned ? "attuned" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </>
-                }
-              >
-                <ItemDetail item={row.item} />
-                <DetailBody>
-                  <DetailRow label="Quantity" value={row.quantity} />
-                  <DetailRow
-                    label="Equipped"
-                    value={row.equipped ? "Yes" : null}
-                  />
-                  <DetailRow
-                    label="Attuned"
-                    value={
-                      row.attuned
-                        ? "Yes"
-                        : row.item.requiresAttunement
-                          ? "Not attuned"
-                          : null
-                    }
-                  />
-                </DetailBody>
-              </RowDetail>
-              <RemoveButton onRemove={() => onRemove(row.id)} />
-            </li>
+              row={row}
+              patch={patchInventory}
+              onRemove={onRemove}
+            />
           ))}
         </ul>
       )}

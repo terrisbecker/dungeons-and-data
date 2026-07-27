@@ -30,7 +30,9 @@ async function assertAttunementCapacity(owner: Owner, excludeId?: string) {
       ? await countAttunedForCharacter(owner.characterId, excludeId)
       : await countAttunedForCreature(owner.creatureId, excludeId);
   if (attunedCount >= ATTUNEMENT_CAP) {
-    throw conflict();
+    throw conflict(
+      `Already attuned to ${ATTUNEMENT_CAP} items — unattune one first.`,
+    );
   }
 }
 

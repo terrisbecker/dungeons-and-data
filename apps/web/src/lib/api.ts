@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type {
   ApiError,
   AuthResponse,
@@ -5,9 +6,14 @@ import type {
   CampaignRole,
   CharacterSheet,
   CharacterSummary,
+  CreatureKind,
+  CreatureStatBlock,
+  CreatureSummary,
   FeatCatalog,
   FeatureCatalog,
   ItemCatalog,
+  LocationDetail,
+  LocationRow,
   MeResponse,
   SpellCatalog,
 } from "@dnd/shared";
@@ -72,10 +78,11 @@ export function createCampaign(body: unknown): Promise<Campaign> {
   });
 }
 
-// A single campaign with its roster (GET /campaigns/:id).
-export function getCampaign(id: string): Promise<Campaign> {
-  return serverFetch<Campaign>(`/campaigns/${id}`);
-}
+// A single campaign with its roster (GET /campaigns/:id). Wrapped in React's
+// cache() so the campaign layout and the page it renders share one request.
+export const getCampaign = cache((id: string): Promise<Campaign> => {
+  return serverFetch<Campaign>(`/campaigns/${encodeURIComponent(id)}`);
+});
 
 // Join a campaign as a PLAYER by its id (POST /campaigns/:id/join). The API
 // seats the caller (from the token) — the id is only used to find the campaign.
@@ -155,6 +162,89 @@ export function listFeats(): Promise<FeatCatalog[]> {
 
 export function listFeatures(): Promise<FeatureCatalog[]> {
   return serverFetch<FeatureCatalog[]>("/features");
+}
+
+// Every location owned by a campaign (GET /locations?campaignId=…), flat and
+// alphabetical. The browser derives the tree, the breadcrumb, and the parent
+// picker from this single list rather than fetching level by level.
+export function listLocations(campaignId: string): Promise<LocationRow[]> {
+  return serverFetch<LocationRow[]>(
+    `/locations?campaignId=${encodeURIComponent(campaignId)}`,
+  );
+}
+
+// One location with the creatures placed there (GET /locations/:id).
+export function getLocation(id: string): Promise<LocationDetail> {
+  return serverFetch<LocationDetail>(`/locations/${encodeURIComponent(id)}`);
+}
+
+export function createLocation(body: unknown): Promise<LocationRow> {
+  return serverFetch<LocationRow>("/locations", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateLocation(
+  id: string,
+  body: unknown,
+): Promise<LocationRow> {
+  return serverFetch<LocationRow>(`/locations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteLocation(id: string): Promise<void> {
+  return serverFetch<void>(`/locations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// Every creature visible from a campaign (GET /creatures). `includeShared`
+// folds in the shared-catalog rows (campaignId null) so a DM sees their own
+// creatures and the common bestiary in one read.
+export function listCreatures(
+  campaignId: string,
+  { includeShared = false, kind }: ListCreaturesOptions = {},
+): Promise<CreatureSummary[]> {
+  const query = new URLSearchParams({ campaignId });
+  if (includeShared) query.set("includeShared", "true");
+  if (kind) query.set("kind", kind);
+  return serverFetch<CreatureSummary[]>(`/creatures?${query}`);
+}
+
+export interface ListCreaturesOptions {
+  includeShared?: boolean;
+  kind?: CreatureKind;
+}
+
+// The full stat block (GET /creatures/:id/sheet) — scalars, derived, skills,
+// entries, damage modifiers, inventory, and location placements.
+export function getCreatureStatBlock(id: string): Promise<CreatureStatBlock> {
+  return serverFetch<CreatureStatBlock>(
+    `/creatures/${encodeURIComponent(id)}/sheet`,
+  );
+}
+
+export function createCreature(body: unknown): Promise<{ id: string }> {
+  return serverFetch<{ id: string }>("/creatures", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateCreature(id: string, body: unknown): Promise<unknown> {
+  return serverFetch(`/creatures/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteCreature(id: string): Promise<void> {
+  return serverFetch<void>(`/creatures/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 // Public auth calls (no token needed) used by the BFF Route Handlers.

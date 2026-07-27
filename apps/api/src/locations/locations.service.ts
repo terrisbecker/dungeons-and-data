@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
-import { notFound } from "../http/http-error.js";
+import { badRequest, notFound } from "../http/http-error.js";
 import { mapPrismaError } from "../http/prisma-errors.js";
 import {
   asRecord,
+  nullableString,
+  nullableUuidField,
   optionalString,
   optionalUuidField,
   requireString,
@@ -11,6 +13,7 @@ import {
   createLocation,
   deleteLocation,
   findLocationById,
+  findLocationParentId,
   findLocations,
   updateLocation,
 } from "./locations.queries.js";
@@ -19,14 +22,33 @@ function parseOptionalFields(
   body: Record<string, unknown>,
 ): Partial<Prisma.LocationUncheckedCreateInput> {
   const data: Partial<Prisma.LocationUncheckedCreateInput> = {};
-  const description = optionalString(body, "description");
+  // description/parentId are nullable: an explicit null clears them, so a
+  // location can be promoted back to a root.
+  const description = nullableString(body, "description");
   if (description !== undefined) data.description = description;
-  const parentId = optionalUuidField(body, "parentId");
+  const parentId = nullableUuidField(body, "parentId");
   if (parentId !== undefined) data.parentId = parentId;
   // Owning campaign (null = shared location). Drives authorization.
   const campaignId = optionalUuidField(body, "campaignId");
   if (campaignId !== undefined) data.campaignId = campaignId;
   return data;
+}
+
+// The hierarchy is a tree, but nothing in the schema stops a PATCH from making
+// a loop (A -> B -> A), which would hang every consumer that walks it. Prisma
+// can't express the constraint, so it lives here with the other invariants:
+// walk up from the proposed parent and refuse if we come back around to `id`.
+async function assertNoParentCycle(id: string, parentId: string) {
+  if (parentId === id) throw badRequest();
+  const visited = new Set<string>([id]);
+  let cursor: string | null = parentId;
+  while (cursor !== null) {
+    if (visited.has(cursor)) throw badRequest();
+    visited.add(cursor);
+    const row = await findLocationParentId(cursor);
+    if (!row) throw badRequest();
+    cursor = row.parentId;
+  }
 }
 
 export async function createLocationService(rawBody: unknown) {
@@ -43,8 +65,8 @@ export async function createLocationService(rawBody: unknown) {
   }
 }
 
-export function listLocationsService() {
-  return findLocations();
+export function listLocationsService(campaignId?: string) {
+  return findLocations(campaignId);
 }
 
 export async function getLocationService(id: string) {
@@ -60,6 +82,9 @@ export async function updateLocationService(id: string, rawBody: unknown) {
   if (locationName !== undefined) data.locationName = locationName;
   const type = optionalString(body, "type");
   if (type !== undefined) data.type = type;
+  if (typeof data.parentId === "string") {
+    await assertNoParentCycle(id, data.parentId);
+  }
   try {
     return await updateLocation(id, data);
   } catch (error) {
