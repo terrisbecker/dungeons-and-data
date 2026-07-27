@@ -149,6 +149,16 @@ export function getMyCharacters(playerId: string): Promise<CharacterSummary[]> {
   );
 }
 
+// Every character in a campaign (GET /characters?campaignId=…), for the
+// campaign-wide roster.
+export function listCampaignCharacters(
+  campaignId: string,
+): Promise<CharacterSummary[]> {
+  return serverFetch<CharacterSummary[]>(
+    `/characters?campaignId=${encodeURIComponent(campaignId)}`,
+  );
+}
+
 // The full virtual character sheet (GET /characters/:id/sheet).
 export function getCharacterSheet(id: string): Promise<CharacterSheet> {
   return serverFetch<CharacterSheet>(

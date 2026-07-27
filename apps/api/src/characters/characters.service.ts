@@ -15,6 +15,7 @@ import {
 import { flattenItem } from "../items/items.service.js";
 import {
   computeDerived,
+  totalLevel,
   type DerivedInput,
   type DerivedStats,
 } from "./characters.derived.js";
@@ -138,8 +139,15 @@ export async function createCharacterService(rawBody: unknown) {
   }
 }
 
-export function listCharactersService(playerId?: string) {
-  return findCharacters(playerId);
+export async function listCharactersService(
+  playerId?: string,
+  campaignId?: string,
+) {
+  const characters = await findCharacters(playerId, campaignId);
+  return characters.map(({ classes, ...character }) => ({
+    ...character,
+    totalLevel: totalLevel(classes),
+  }));
 }
 
 // Core read: character + classes/skills + the computed derived block.

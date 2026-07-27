@@ -71,8 +71,9 @@ is implemented, plus a **JWT auth + role-based authorization** layer and the
 **full-stack npm-workspaces monorepo**: the backend lives under `apps/api/`, a
 Next.js frontend (`apps/web/`) now covers the **auth slice, a dashboard, and
 campaign + character + world management** (character creation and an interactive
-character sheet; campaign locations and creatures, including placing creatures
-at locations), and `packages/shared` holds the type-only API contract.
+character sheet; a campaign-wide character roster; campaign locations and
+creatures, including placing creatures at locations), and `packages/shared`
+holds the type-only API contract.
 Everything reaches the API through a BFF with an httpOnly-cookie session.
 Working on branch `campaign-db/locations`.
 
@@ -155,7 +156,10 @@ Working on branch `campaign-db/locations`.
     a computed `derived` block, what `PATCH` also returns), and
     `GET /characters/:id/sheet` is the full **virtual character sheet** that
     additionally joins spell slots, resources, proficiencies, conditions, spells,
-    feats, features, and inventory. See `docs/character-sheet.md`.
+    feats, features, and inventory. See `docs/character-sheet.md`. The list
+    read (`GET /characters`) filters by `?playerId` and/or `?campaignId` and
+    adds a computed `totalLevel` per row (sum of `CharacterClass.level`) —
+    the campaign-scoped filter backs the campaign workspace's roster page.
   - Owned children (single `id` PK, `/topic/:id`): `character-classes/`,
     `spell-slots/`, `character-resources/`, `character-skills/`,
     `proficiencies/`, `character-conditions/`, `inventory-items/`.
@@ -224,9 +228,21 @@ Working on branch `campaign-db/locations`.
     campaign (via a `cache()`d `getCampaign`, shared with the pages under it) and
     renders `campaign-workspace.tsx`, a sidebar shell that takes `children`. Each
     nav item is a real route — Overview (`page.tsx`, the invite code + roster),
-    **Locations**, and `characters`/`encounters`/`settings` stubs; `isActive`
-    comes from `usePathname()` so a nav item stays lit while drilled into a
-    sub-route.
+    **Characters**, **Locations**, **Creatures**, and `encounters`/`settings`
+    stubs; `isActive` comes from `usePathname()` so a nav item stays lit while
+    drilled into a sub-route.
+  - **Campaign characters** (`(app)/campaigns/[id]/characters`): a read-only
+    roster of the campaign — one card per `campaign.memberships` entry
+    (player name + DM/Player role badge, reusing `ROLE_LABEL` from the
+    Overview page's `roster-row.tsx`) listing that player's character(s), or
+    an empty state. Sourced from `listCampaignCharacters(campaignId)`
+    (`GET /characters?campaignId=`), grouped client-side by `playerId`; a
+    character whose player has since left the campaign falls into a trailing
+    "Unassigned" section. Each row links straight into the existing
+    `/characters/[id]` sheet page, which already renders read-only for
+    non-owners/non-DMs (reads are open to any authed user), so no changes
+    were needed there. `characters-roster.tsx` stays a **server component** —
+    there are no write actions on this page.
   - **Campaign locations** (`(app)/campaigns/[id]/locations`): a drill-down
     browser over the `Location` hierarchy. Both the roots page and
     `[locationId]/page.tsx` load the campaign's **whole flat list** once
@@ -344,9 +360,8 @@ Working on branch `campaign-db/locations`.
   catalog **join** rows are add/remove only (no editing `prepared` on a spell or
   `notes` on a feature — that needs PATCH on the `[id]/[otherId]` BFF route,
   excluding `character-feats`, which is a pure join with no API PATCH); the
-  campaign workspace's `characters`/`encounters`/`settings` routes are
-  placeholders (a campaign-wide roster needs `GET /characters` to filter by
-  `campaignId`, which it doesn't); and a placement's `quantity`/`notes` can be set on create
+  campaign workspace's `encounters`/`settings` routes are still placeholders;
+  and a placement's `quantity`/`notes` can be set on create
   and removed, but not edited afterwards (the API has PATCH on
   `/creature-placements/:creatureId/:locationId`, and the BFF route is already
   wired — only the UI control is missing).

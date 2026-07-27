@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { RemoveButton } from "@/components/section-card";
 import { send } from "@/lib/mutate";
 
-const ROLE_LABEL: Record<CampaignRole, string> = {
+export const ROLE_LABEL: Record<CampaignRole, string> = {
   DUNGEON_MASTER: "Dungeon Master",
   PLAYER: "Player",
 };

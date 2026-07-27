@@ -1,13 +1,12 @@
-import { ComingSoon } from "../coming-soon";
+import { loadCampaignRoster } from "./characters-data";
+import { CharactersRoster } from "./characters-roster";
 
-// A campaign-wide roster is not buildable yet: GET /characters filters only by
-// playerId, not campaignId. Players reach their own characters from the
-// dashboard in the meantime.
-export default function CampaignCharactersPage() {
-  return (
-    <ComingSoon
-      title="Characters"
-      description="A roster of every character in this campaign is not wired up yet. For now, open your characters from the dashboard."
-    />
-  );
+export default async function CampaignCharactersPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const { campaign, characters } = await loadCampaignRoster(id);
+  return <CharactersRoster campaign={campaign} characters={characters} />;
 }

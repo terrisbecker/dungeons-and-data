@@ -69,6 +69,9 @@ const characterListSelect = {
   maxHitPoints: true,
   currentHitPoints: true,
   armorClass: true,
+  playerId: true,
+  campaignId: true,
+  classes: { select: { level: true } },
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.PlayerCharacterSelect;
@@ -164,9 +167,13 @@ export function createCharacter(
   });
 }
 
-export function findCharacters(playerId?: string) {
+export function findCharacters(playerId?: string, campaignId?: string) {
   return prisma.playerCharacter.findMany({
-    where: { deletedAt: null, ...(playerId ? { playerId } : {}) },
+    where: {
+      deletedAt: null,
+      ...(playerId ? { playerId } : {}),
+      ...(campaignId ? { campaignId } : {}),
+    },
     orderBy: { createdAt: "desc" },
     select: characterListSelect,
   });

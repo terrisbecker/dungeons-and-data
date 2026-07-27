@@ -92,6 +92,9 @@ export interface CharacterSummary {
   maxHitPoints: number;
   currentHitPoints: number;
   armorClass: number;
+  playerId: string | null;
+  campaignId: string | null;
+  totalLevel: number;
   createdAt: string;
   updatedAt: string;
 }
