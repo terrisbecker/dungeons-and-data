@@ -367,12 +367,15 @@ export function DefenseSection({
       </CardHeader>
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Line label="Armor class">
+          <Line label="Armor class">{creature.derived.armorClass}</Line>
+          <Line label="Base AC">
             <NumberField
               creatureId={id}
-              label="Armor class"
-              field="armorClass"
-              value={creature.armorClass}
+              label="Base armor class (natural armor / unarmored override)"
+              field="baseArmorClass"
+              value={creature.baseArmorClass}
+              nullable
+              render={(v) => (v === null ? "auto (10 + Dex)" : String(v))}
               canManage={canManage}
             />
           </Line>

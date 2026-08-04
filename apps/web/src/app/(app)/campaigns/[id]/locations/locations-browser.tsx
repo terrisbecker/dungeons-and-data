@@ -58,7 +58,7 @@ export function LocationsBrowser({
             {current ? current.locationName : "Locations"}
             {current && <Badge variant="outline">{current.type}</Badge>}
           </h1>
-          <p className="text-muted-foreground max-w-prose text-sm">
+          <p className="text-muted-foreground max-w-prose text-sm whitespace-pre-wrap">
             {current
               ? (current.description ?? "No description yet.")
               : "The top level of this campaign's world. Open one to go a level deeper."}

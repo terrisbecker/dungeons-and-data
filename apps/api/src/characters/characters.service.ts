@@ -14,9 +14,13 @@ import {
 } from "../http/validate.js";
 import { flattenItem } from "../items/items.service.js";
 import {
+  abilityModifier,
+  computeArmorClass,
   computeDerived,
+  totalLevel,
   type DerivedInput,
   type DerivedStats,
+  type EquippedArmorPiece,
 } from "./characters.derived.js";
 import {
   createCharacter,
@@ -50,6 +54,7 @@ function parseOptionalFields(
   };
 
   set("subrace", nullableString(body, "subrace"));
+  set("baseArmorClass", nullableInt(body, "baseArmorClass", { min: 0 }));
   set("alignment", optionalEnum(body, "alignment", ALIGNMENTS));
   set("size", optionalEnum(body, "size", SIZES));
   set("experiencePoints", optionalInt(body, "experiencePoints", { min: 0 }));
@@ -127,7 +132,6 @@ export async function createCharacterService(rawBody: unknown) {
     charisma: ability(body, "charisma"),
     maxHitPoints,
     currentHitPoints,
-    armorClass: requireInt(body, "armorClass", { min: 0 }),
     ...parseOptionalFields(body),
   };
 
@@ -138,8 +142,36 @@ export async function createCharacterService(rawBody: unknown) {
   }
 }
 
-export function listCharactersService(playerId?: string) {
-  return findCharacters(playerId);
+// Pulls the equipped armor/shield pieces out of an inventory relation —
+// whichever shape it was joined in (the lean core/list armor-only join, or
+// the full sheet join, both carry `equipped` + `item.armor`).
+function extractEquippedArmor(
+  inventory: {
+    equipped: boolean;
+    item: { armor: EquippedArmorPiece | null };
+  }[],
+): EquippedArmorPiece[] {
+  return inventory
+    .filter((row) => row.equipped && row.item.armor !== null)
+    .map((row) => row.item.armor as EquippedArmorPiece);
+}
+
+export async function listCharactersService(
+  playerId?: string,
+  campaignId?: string,
+) {
+  const characters = await findCharacters(playerId, campaignId);
+  return characters.map(
+    ({ classes, inventory, dexterity, baseArmorClass, ...character }) => ({
+      ...character,
+      totalLevel: totalLevel(classes),
+      armorClass: computeArmorClass(
+        abilityModifier(dexterity),
+        baseArmorClass,
+        extractEquippedArmor(inventory),
+      ),
+    }),
+  );
 }
 
 // Core read: character + classes/skills + the computed derived block.
@@ -148,7 +180,8 @@ export async function getCharacterService(id: string) {
   if (!character) {
     throw notFound();
   }
-  return withDerived(character);
+  const { inventory: _inventory, ...rest } = withDerived(character);
+  return rest;
 }
 
 // Full "virtual character sheet": every related table joined in, plus derived.
@@ -157,15 +190,18 @@ export async function getCharacterSheetService(id: string) {
   if (!character) {
     throw notFound();
   }
-  // The joined item rows carry the 1:1 weapon/armor satellites; fold them in so
+  // Compute derived stats (armorClass needs the raw, unflattened inventory —
+  // item.armor nested) before flattening the item rows for the response. The
+  // joined item rows carry the 1:1 weapon/armor satellites; fold them in so
   // `inventory[].item` is the same flat shape GET /items returns.
-  return withDerived({
-    ...character,
-    inventory: character.inventory.map((row) => ({
+  const derived = withDerived(character);
+  return {
+    ...derived,
+    inventory: derived.inventory.map((row) => ({
       ...row,
       item: flattenItem(row.item),
     })),
-  });
+  };
 }
 
 export async function updateCharacterService(id: string, rawBody: unknown) {
@@ -194,10 +230,6 @@ export async function updateCharacterService(id: string, rawBody: unknown) {
   if (maxHitPoints !== undefined) {
     data.maxHitPoints = maxHitPoints;
   }
-  const armorClass = optionalInt(body, "armorClass", { min: 0 });
-  if (armorClass !== undefined) {
-    data.armorClass = armorClass;
-  }
   const currentHitPoints = optionalInt(body, "currentHitPoints", { min: 0 });
   if (currentHitPoints !== undefined) {
     data.currentHitPoints = currentHitPoints;
@@ -222,10 +254,23 @@ export async function deleteCharacterService(id: string): Promise<void> {
   }
 }
 
-// Generic over the core and sheet shapes — both structurally satisfy
-// DerivedInput (scalars + classes + skills), so either can carry the block.
-function withDerived<T extends DerivedInput>(
+// Generic over the core and sheet shapes — both carry the scalars/classes/
+// skills DerivedInput needs, plus an `inventory` relation (the lean armor-only
+// join on core, the full catalog join on the sheet) that armorClass is
+// computed from instead of a plain `equippedArmor` field.
+type CharacterDerivedSource = Omit<DerivedInput, "equippedArmor"> & {
+  inventory: {
+    equipped: boolean;
+    item: { armor: EquippedArmorPiece | null };
+  }[];
+};
+
+function withDerived<T extends CharacterDerivedSource>(
   character: T,
 ): T & { derived: DerivedStats } {
-  return { ...character, derived: computeDerived(character) };
+  const derived = computeDerived({
+    ...character,
+    equippedArmor: extractEquippedArmor(character.inventory),
+  });
+  return { ...character, derived };
 }

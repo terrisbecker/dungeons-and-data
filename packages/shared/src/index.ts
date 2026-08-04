@@ -54,6 +54,31 @@ export interface Campaign {
   }>;
 }
 
+// description is deliberately non-nullable here: updateCampaignService reads
+// it with optionalString (not nullableString), so an explicit null is a no-op
+// on the API, not a clear — send "" to blank it out instead.
+export interface UpdateCampaignInput {
+  name?: string;
+  description?: string;
+  status?: CampaignStatus;
+}
+
+// PATCH/DELETE /campaign-memberships/:id — mirrors the `select` in
+// campaign-memberships.queries.ts (a standalone membership row, unlike the
+// nested shapes above).
+export interface CampaignMembership {
+  id: string;
+  campaignId: string;
+  playerId: string;
+  role: CampaignRole;
+  joinedAt: string;
+  player: { id: string; username: string; displayName: string | null };
+}
+
+export interface UpdateMembershipInput {
+  role?: CampaignRole;
+}
+
 // A lean PlayerCharacter as returned by GET /characters (mirrors
 // characterListSelect in characters.queries.ts). alignment/size are enums on the
 // API, typed loosely here since the dashboard list only renders race/HP/AC.
@@ -67,6 +92,9 @@ export interface CharacterSummary {
   maxHitPoints: number;
   currentHitPoints: number;
   armorClass: number;
+  playerId: string | null;
+  campaignId: string | null;
+  totalLevel: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -464,7 +492,10 @@ export interface CreateCharacterInput {
   maxHitPoints: number;
   currentHitPoints: number;
   temporaryHitPoints?: number;
-  armorClass: number;
+  // Manual AC fallback/override — armorClass itself is always computed
+  // server-side from equipped armor/shield + Dex (see DerivedStats). null/
+  // omitted = the standard 10 + Dex formula when unarmored.
+  baseArmorClass?: number | null;
   speed?: number;
   flySpeed?: number | null;
   swimSpeed?: number | null;
@@ -495,6 +526,7 @@ export interface DerivedStats {
   abilityModifiers: Record<Ability, number>;
   savingThrows: Record<Ability, number>;
   skills: Record<Skill, number>;
+  armorClass: number;
   passivePerception: number;
   passiveInvestigation: number;
   passiveInsight: number;
@@ -536,7 +568,8 @@ export interface CharacterSheet {
   currentHitPoints: number;
   temporaryHitPoints: number;
   hitPointMaxModifier: number;
-  armorClass: number;
+  // Manual AC fallback/override — the computed value lives at derived.armorClass.
+  baseArmorClass: number | null;
   deathSaveSuccesses: number;
   deathSaveFailures: number;
 
@@ -659,6 +692,7 @@ export interface CreatureDerivedStats {
   abilityModifiers: Record<Ability, number>;
   savingThrows: Record<Ability, number>;
   skills: Record<Skill, number>;
+  armorClass: number;
   passivePerception: number;
   passiveInvestigation: number;
   passiveInsight: number;
@@ -695,7 +729,8 @@ export interface CreatureScalars {
   alignment: Alignment | null;
   alignmentNote: string | null;
 
-  armorClass: number;
+  // Manual AC fallback/override — the computed value lives at derived.armorClass.
+  baseArmorClass: number | null;
   armorClassNote: string | null;
   hitPoints: number;
   hitDice: string | null;
@@ -789,7 +824,6 @@ export interface CreatureStatBlock extends CreatureCore {
 export interface CreateCreatureInput {
   kind: CreatureKind;
   name: string;
-  armorClass: number;
   hitPoints: number;
 
   strength: number;
@@ -805,6 +839,10 @@ export interface CreateCreatureInput {
   typeTags?: string[];
   alignment?: Alignment | null;
   alignmentNote?: string | null;
+  // Manual AC fallback/override — armorClass itself is always computed
+  // server-side from equipped armor/shield + Dex (see CreatureDerivedStats).
+  // null/omitted = the standard 10 + Dex formula when unarmored.
+  baseArmorClass?: number | null;
   armorClassNote?: string | null;
   hitDice?: string | null;
 

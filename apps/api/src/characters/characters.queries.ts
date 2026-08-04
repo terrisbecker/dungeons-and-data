@@ -32,7 +32,7 @@ const characterScalarSelect = {
   currentHitPoints: true,
   temporaryHitPoints: true,
   hitPointMaxModifier: true,
-  armorClass: true,
+  baseArmorClass: true,
   deathSaveSuccesses: true,
   deathSaveFailures: true,
   speed: true,
@@ -58,7 +58,33 @@ const characterScalarSelect = {
   updatedAt: true,
 } satisfies Prisma.PlayerCharacterSelect;
 
-// Lighter projection for list responses.
+// The lean equipped-armor join the armorClass formula needs: only rows whose
+// item has an ArmorStats satellite (armor or shield), with just the fields
+// computeArmorClass reads. Shared between the list and core selects so
+// armorClass can be computed without joining the full inventory/catalog
+// projection (that stays reserved for the sheet select below).
+const equippedArmorInventorySelect = {
+  where: { item: { armor: { isNot: null } } },
+  select: {
+    equipped: true,
+    item: {
+      select: {
+        armor: {
+          select: {
+            armorCategory: true,
+            baseArmorClass: true,
+            addDexToArmorClass: true,
+            maxDexBonus: true,
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.PlayerCharacterSelect["inventory"];
+
+// Lighter projection for list responses. dexterity + the lean armor join back
+// the computed armorClass, the same way `classes` backs the computed
+// totalLevel.
 const characterListSelect = {
   id: true,
   characterName: true,
@@ -66,15 +92,21 @@ const characterListSelect = {
   subrace: true,
   alignment: true,
   size: true,
+  dexterity: true,
   maxHitPoints: true,
   currentHitPoints: true,
-  armorClass: true,
+  baseArmorClass: true,
+  playerId: true,
+  campaignId: true,
+  classes: { select: { level: true } },
+  inventory: equippedArmorInventorySelect,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.PlayerCharacterSelect;
 
-// Core detail: scalars plus the two relations the derived-stats math needs.
-// This is what GET /characters/:id returns — cheap and common.
+// Core detail: scalars plus the relations the derived-stats math needs. This
+// is what GET /characters/:id returns — cheap and common, so inventory stays
+// filtered to just the armor-bearing rows instead of the full sheet join.
 const characterCoreSelect = {
   ...characterScalarSelect,
   classes: {
@@ -91,6 +123,7 @@ const characterCoreSelect = {
   skills: {
     select: { id: true, skill: true, proficiency: true },
   },
+  inventory: equippedArmorInventorySelect,
 } satisfies Prisma.PlayerCharacterSelect;
 
 // Full "virtual character sheet": core plus every other owned/related table.
@@ -164,9 +197,13 @@ export function createCharacter(
   });
 }
 
-export function findCharacters(playerId?: string) {
+export function findCharacters(playerId?: string, campaignId?: string) {
   return prisma.playerCharacter.findMany({
-    where: { deletedAt: null, ...(playerId ? { playerId } : {}) },
+    where: {
+      deletedAt: null,
+      ...(playerId ? { playerId } : {}),
+      ...(campaignId ? { campaignId } : {}),
+    },
     orderBy: { createdAt: "desc" },
     select: characterListSelect,
   });

@@ -10,6 +10,7 @@ import { mapPrismaError } from "../http/prisma-errors.js";
 import { flattenItem } from "../items/items.service.js";
 import {
   asRecord,
+  nullableInt,
   optionalBoolean,
   optionalEnum,
   optionalFloat,
@@ -23,9 +24,12 @@ import {
 } from "../http/validate.js";
 import {
   type AbilityScores,
+  abilityModifier,
+  computeArmorClass,
   computeDerived,
   type DerivedInput,
   type DerivedStats,
+  type EquippedArmorPiece,
   type SaveProficiencies,
 } from "./creatures.derived.js";
 import {
@@ -69,6 +73,7 @@ function parseOptionalFields(
   set("alignmentNote", optionalString(body, "alignmentNote"));
 
   // Defense
+  set("baseArmorClass", nullableInt(body, "baseArmorClass", { min: 0 }));
   set("armorClassNote", optionalString(body, "armorClassNote"));
   set("hitDice", optionalString(body, "hitDice"));
 
@@ -130,7 +135,6 @@ export async function createCreatureService(rawBody: unknown) {
   const data: Prisma.CreatureUncheckedCreateInput = {
     kind: requireEnum(body, "kind", KINDS),
     name: requireString(body, "name"),
-    armorClass: requireInt(body, "armorClass", { min: 0 }),
     hitPoints: requireInt(body, "hitPoints", { min: 0 }),
     strength: ability(body, "strength"),
     dexterity: ability(body, "dexterity"),
@@ -148,9 +152,33 @@ export async function createCreatureService(rawBody: unknown) {
   }
 }
 
+// Pulls the equipped armor/shield pieces out of an inventory relation —
+// whichever shape it was joined in (the lean core/list armor-only join, or
+// the full sheet join, both carry `equipped` + `item.armor`).
+function extractEquippedArmor(
+  inventory: {
+    equipped: boolean;
+    item: { armor: EquippedArmorPiece | null };
+  }[],
+): EquippedArmorPiece[] {
+  return inventory
+    .filter((row) => row.equipped && row.item.armor !== null)
+    .map((row) => row.item.armor as EquippedArmorPiece);
+}
+
 export async function listCreaturesService(filter?: CreatureListFilter) {
   const rows = await findCreatures(filter);
-  return rows.map(normalizeCreature);
+  return rows.map(({ inventory, dexterity, baseArmorClass, ...row }) => {
+    const normalized = normalizeCreature(row);
+    return {
+      ...normalized,
+      armorClass: computeArmorClass(
+        abilityModifier(dexterity),
+        baseArmorClass,
+        extractEquippedArmor(inventory),
+      ),
+    };
+  });
 }
 
 // Core read: creature + skills + the computed derived block.
@@ -159,7 +187,8 @@ export async function getCreatureService(id: string) {
   if (!creature) {
     throw notFound();
   }
-  return withDerived(creature);
+  const { inventory: _inventory, ...rest } = withDerived(creature);
+  return rest;
 }
 
 // Full stat block: every related table joined in, plus derived.
@@ -168,15 +197,18 @@ export async function getCreatureSheetService(id: string) {
   if (!creature) {
     throw notFound();
   }
-  // The joined item rows carry the 1:1 weapon/armor satellites; fold them in so
+  // Compute derived stats (armorClass needs the raw, unflattened inventory —
+  // item.armor nested) before flattening the item rows for the response. The
+  // joined item rows carry the 1:1 weapon/armor satellites; fold them in so
   // `inventory[].item` is the same flat shape GET /items returns.
-  return withDerived({
-    ...creature,
-    inventory: creature.inventory.map((row) => ({
+  const derived = withDerived(creature);
+  return {
+    ...derived,
+    inventory: derived.inventory.map((row) => ({
       ...row,
       item: flattenItem(row.item),
     })),
-  });
+  };
 }
 
 export async function updateCreatureService(id: string, rawBody: unknown) {
@@ -205,8 +237,6 @@ export async function updateCreatureService(id: string, rawBody: unknown) {
   if (kind !== undefined) data.kind = kind;
   const name = optionalString(body, "name");
   if (name !== undefined) data.name = name;
-  const armorClass = optionalInt(body, "armorClass", { min: 0 });
-  if (armorClass !== undefined) data.armorClass = armorClass;
   const hitPoints = optionalInt(body, "hitPoints", { min: 0 });
   if (hitPoints !== undefined) data.hitPoints = hitPoints;
 
@@ -244,15 +274,25 @@ function normalizeCreature<
 }
 
 // Generic over the core and sheet shapes — both carry the ability scores, save
-// proficiencies, CR, and skills that computeDerived reads.
+// proficiencies, CR, and skills that computeDerived reads, plus an
+// `inventory` relation (the lean armor-only join on core, the full catalog
+// join on the sheet) that armorClass is computed from.
 type CreatureDerivedSource = AbilityScores &
   SaveProficiencies & {
     challengeRating: Prisma.Decimal | null;
     skills: DerivedInput["skills"];
+    baseArmorClass: number | null;
+    inventory: {
+      equipped: boolean;
+      item: { armor: EquippedArmorPiece | null };
+    }[];
   };
 
 function withDerived<T extends CreatureDerivedSource>(creature: T) {
   const normalized = normalizeCreature(creature);
-  const derived: DerivedStats = computeDerived(normalized);
+  const derived: DerivedStats = computeDerived({
+    ...normalized,
+    equippedArmor: extractEquippedArmor(normalized.inventory),
+  });
   return { ...normalized, derived };
 }

@@ -107,7 +107,7 @@ interface FormState {
   maxHitPoints: string;
   currentHitPoints: string;
   temporaryHitPoints: string;
-  armorClass: string;
+  baseArmorClass: string;
   speed: string;
   flySpeed: string;
   swimSpeed: string;
@@ -155,7 +155,7 @@ function initialForm(): FormState {
     maxHitPoints: "",
     currentHitPoints: "",
     temporaryHitPoints: "0",
-    armorClass: "10",
+    baseArmorClass: "",
     speed: "30",
     flySpeed: "",
     swimSpeed: "",
@@ -249,8 +249,6 @@ export function CharacterWizard({
     if (current === 2) {
       const max = optNum(form.maxHitPoints);
       if (max === undefined || max < 0) return "Enter max hit points (≥ 0).";
-      const ac = optNum(form.armorClass);
-      if (ac === undefined || ac < 0) return "Enter armor class (≥ 0).";
       const temp = optNum(form.temporaryHitPoints) ?? 0;
       const current2 = optNum(form.currentHitPoints);
       if (current2 !== undefined && (current2 < 0 || current2 > max + temp)) {
@@ -299,7 +297,7 @@ export function CharacterWizard({
       maxHitPoints: max,
       currentHitPoints: current,
       temporaryHitPoints: optNum(form.temporaryHitPoints) ?? 0,
-      armorClass: optNum(form.armorClass) ?? 10,
+      baseArmorClass: optNum(form.baseArmorClass) ?? null,
       speed: optNum(form.speed) ?? 30,
       flySpeed: optNum(form.flySpeed) ?? null,
       swimSpeed: optNum(form.swimSpeed) ?? null,
@@ -655,11 +653,12 @@ function CombatStep({
           onChange={(v) => set("temporaryHitPoints", v)}
         />
         <NumberField
-          id="armorClass"
-          label="Armor class"
+          id="baseArmorClass"
+          label="Base armor class (optional)"
           min={0}
-          value={form.armorClass}
-          onChange={(v) => set("armorClass", v)}
+          value={form.baseArmorClass}
+          onChange={(v) => set("baseArmorClass", v)}
+          placeholder="auto: 10 + Dex"
         />
       </div>
       <div>
@@ -852,10 +851,10 @@ function ReviewStep({
         />
         <ReviewRow label="Saving throws" value={savingThrows || "None"} />
         <ReviewRow
-          label="HP / AC"
+          label="HP"
           value={`${form.currentHitPoints || form.maxHitPoints || "0"}/${
             form.maxHitPoints || "0"
-          } · AC ${form.armorClass || "—"}`}
+          }`}
         />
         <ReviewRow label="Campaign" value={campaignName} />
       </div>

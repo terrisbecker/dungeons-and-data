@@ -403,7 +403,9 @@ async function seedCharacters(cat: Catalog) {
       wisdomSaveProf: true,
       maxHitPoints: 32,
       currentHitPoints: 32,
-      armorClass: 12,
+      // No armor equipped (a Wizard) — kept as an explicit override; the
+      // computed unarmored formula (10 + Dex) would give 13, not 12.
+      baseArmorClass: 12,
       darkvision: 60,
       gold: 120,
       silver: 30,
@@ -517,7 +519,8 @@ async function seedCharacters(cat: Catalog) {
       constitutionSaveProf: true,
       maxHitPoints: 44,
       currentHitPoints: 44,
-      armorClass: 18,
+      // No baseArmorClass override — Chain Mail (16) + Shield (+2) equipped
+      // below already computes to 18.
       darkvision: 60,
       gold: 60,
       classes: {
@@ -596,7 +599,8 @@ async function seedCharacters(cat: Catalog) {
       charismaSaveProf: true,
       maxHitPoints: 24,
       currentHitPoints: 18,
-      armorClass: 18,
+      // No baseArmorClass override — Chain Mail (16) + Shield (+2) equipped
+      // below already computes to 18.
       darkvision: 60,
       gold: 45,
       silver: 80,
@@ -695,7 +699,10 @@ async function seedCharacters(cat: Catalog) {
       maxHitPoints: 68,
       currentHitPoints: 55,
       temporaryHitPoints: 6,
-      armorClass: 15,
+      // No armor equipped (a Barbarian) — kept as an explicit override. This
+      // is really 10 + Dex(+2) + Con(+3) Unarmored Defense, a class feature
+      // the generic equipment formula doesn't model.
+      baseArmorClass: 15,
       speed: 40,
       darkvision: 60,
       gold: 25,
@@ -778,7 +785,8 @@ async function seedCharacters(cat: Catalog) {
       intelligenceSaveProf: true,
       maxHitPoints: 27,
       currentHitPoints: 27,
-      armorClass: 14,
+      // No baseArmorClass override — Leather Armor equipped below (11 + full
+      // Dex) already computes to 15.
       inspiration: true,
       gold: 200,
       electrum: 5,
@@ -920,7 +928,8 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
       creatureType: CreatureType.HUMANOID,
       typeTags: ["half-elf"],
       alignment: "LG",
-      armorClass: 18,
+      // No baseArmorClass override — Chain Mail (16) + Shield (+2) equipped
+      // below already computes to 18.
       armorClassNote: "chain mail, shield",
       hitPoints: 39,
       hitDice: "6d8 + 12",
@@ -1002,7 +1011,8 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
       creatureType: CreatureType.HUMANOID,
       typeTags: ["gnome"],
       alignment: "CN",
-      armorClass: 12,
+      // No baseArmorClass override or equipped armor — the unarmored formula
+      // (10 + Dex(+2)) already computes to 12.
       hitPoints: 22,
       hitDice: "5d6 + 5",
       speed: 25,
@@ -1079,7 +1089,7 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
       size: CreatureSize.GARGANTUAN,
       creatureType: CreatureType.DRAGON,
       alignment: "CE",
-      armorClass: 22,
+      baseArmorClass: 22,
       armorClassNote: "natural armor",
       hitPoints: 546,
       hitDice: "28d20 + 252",
@@ -1205,7 +1215,8 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
       creatureType: CreatureType.HUMANOID,
       typeTags: ["goblinoid"],
       alignment: "NE",
-      armorClass: 15,
+      // No baseArmorClass override — Leather Armor (11 + full Dex) + Shield
+      // (+2) equipped below already computes to 15.
       armorClassNote: "leather armor, shield",
       hitPoints: 7,
       hitDice: "2d6",
@@ -1248,6 +1259,10 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
             item: { connect: { id: cat.items["Leather Armor"] } },
             equipped: true,
           },
+          {
+            item: { connect: { id: cat.items["Shield"] } },
+            equipped: true,
+          },
         ],
       },
       placements: {
@@ -1272,7 +1287,8 @@ async function seedCreatures(cat: Catalog, loc: Locations) {
       creatureType: CreatureType.UNDEAD,
       alignment: "NE",
       alignmentNote: "neutral evil",
-      armorClass: 8,
+      // No baseArmorClass override or equipped armor — the unarmored formula
+      // (10 + Dex(-2)) already computes to 8.
       hitPoints: 22,
       hitDice: "3d8 + 9",
       speed: 20,

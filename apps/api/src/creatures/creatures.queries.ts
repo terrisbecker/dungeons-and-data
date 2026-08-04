@@ -14,7 +14,7 @@ const creatureScalarSelect = {
   typeTags: true,
   alignment: true,
   alignmentNote: true,
-  armorClass: true,
+  baseArmorClass: true,
   armorClassNote: true,
   hitPoints: true,
   hitDice: true,
@@ -57,8 +57,33 @@ const creatureScalarSelect = {
   updatedAt: true,
 } satisfies Prisma.CreatureSelect;
 
+// The lean equipped-armor join the armorClass formula needs: only rows whose
+// item has an ArmorStats satellite (armor or shield), with just the fields
+// computeArmorClass reads. Shared between the list and core selects so
+// armorClass can be computed without joining the full inventory/catalog
+// projection (that stays reserved for the sheet select below).
+const equippedArmorInventorySelect = {
+  where: { item: { armor: { isNot: null } } },
+  select: {
+    equipped: true,
+    item: {
+      select: {
+        armor: {
+          select: {
+            armorCategory: true,
+            baseArmorClass: true,
+            addDexToArmorClass: true,
+            maxDexBonus: true,
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.CreatureSelect["inventory"];
+
 // Lighter projection for list responses. campaignId is included so callers can
-// tell a campaign-owned creature from a shared-catalog one without a second read.
+// tell a campaign-owned creature from a shared-catalog one without a second
+// read. dexterity + the lean armor join back the computed armorClass.
 const creatureListSelect = {
   id: true,
   kind: true,
@@ -66,21 +91,25 @@ const creatureListSelect = {
   size: true,
   creatureType: true,
   alignment: true,
-  armorClass: true,
+  dexterity: true,
+  baseArmorClass: true,
   hitPoints: true,
   challengeRating: true,
   campaignId: true,
+  inventory: equippedArmorInventorySelect,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.CreatureSelect;
 
-// Core detail: scalars plus the skills relation the derived-stats math needs.
-// This is what GET /creatures/:id returns — cheap and common.
+// Core detail: scalars plus the relations the derived-stats math needs. This
+// is what GET /creatures/:id returns — cheap and common, so inventory stays
+// filtered to just the armor-bearing rows instead of the full sheet join.
 const creatureCoreSelect = {
   ...creatureScalarSelect,
   skills: {
     select: { id: true, skill: true, proficiency: true },
   },
+  inventory: equippedArmorInventorySelect,
 } satisfies Prisma.CreatureSelect;
 
 // Full stat block: core plus every other owned/related table. Explicitly opted

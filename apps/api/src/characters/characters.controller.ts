@@ -25,7 +25,11 @@ export async function getCharacters(
     typeof req.query.playerId === "string"
       ? requireUuid(req.query.playerId)
       : undefined;
-  res.json(await listCharactersService(playerId));
+  const campaignId =
+    typeof req.query.campaignId === "string"
+      ? requireUuid(req.query.campaignId)
+      : undefined;
+  res.json(await listCharactersService(playerId, campaignId));
 }
 
 export async function getCharacter(req: Request, res: Response): Promise<void> {

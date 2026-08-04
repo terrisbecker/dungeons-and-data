@@ -100,6 +100,32 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// A non-interactive version of TickBoxes for viewers who can't write — same
+// visual, no click handlers.
+function ReadOnlyTicks({
+  count,
+  filled,
+  fillClass = "bg-primary border-primary",
+}: {
+  count: number;
+  filled: number;
+  fillClass?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className={cn(
+            "size-5 rounded-[4px] border",
+            index < filled ? fillClass : "bg-transparent",
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
 // The editable counterpart: same tile, but the value is one inline editor bound
 // to one column on the character row.
 function EditableStat({
@@ -109,6 +135,7 @@ function EditableStat({
   value,
   min = 0,
   max,
+  canManage,
 }: {
   characterId: string;
   label: string;
@@ -116,6 +143,7 @@ function EditableStat({
   value: number;
   min?: number;
   max?: number;
+  canManage: boolean;
 }) {
   const state = useOptimisticField(value, (next) =>
     patchCharacter(characterId, { [field]: next }),
@@ -124,14 +152,59 @@ function EditableStat({
     <div className="rounded-lg border p-3 text-center">
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className="mt-1 text-lg font-semibold">
-        <EditableNumber
-          label={label}
-          value={state.value}
-          onCommit={(next) => next !== null && state.set(next)}
-          pending={state.pending}
-          min={min}
-          max={max}
-        />
+        {canManage ? (
+          <EditableNumber
+            label={label}
+            value={state.value}
+            onCommit={(next) => next !== null && state.set(next)}
+            pending={state.pending}
+            min={min}
+            max={max}
+          />
+        ) : (
+          value
+        )}
+      </p>
+    </div>
+  );
+}
+
+// Armor Class is computed (see derived.armorClass) from equipped armor/
+// shield + Dex, so the headline number stays read-only; a small nullable
+// override underneath sets the fallback used when nothing is equipped
+// (natural armor, homebrew, or any AC the equipment formula can't express).
+function ArmorClassStat({
+  characterId,
+  armorClass,
+  baseArmorClass,
+  canManage,
+}: {
+  characterId: string;
+  armorClass: number;
+  baseArmorClass: number | null;
+  canManage: boolean;
+}) {
+  const base = useOptimisticField(baseArmorClass, (next) =>
+    patchCharacter(characterId, { baseArmorClass: next }),
+  );
+  return (
+    <div className="rounded-lg border p-3 text-center">
+      <p className="text-muted-foreground text-xs">Armor Class</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums">{armorClass}</p>
+      <p className="text-muted-foreground mt-1 text-xs">
+        base{" "}
+        {canManage ? (
+          <EditableNumber
+            label="Base armor class (natural armor / unarmored override)"
+            value={base.value}
+            onCommit={base.set}
+            pending={base.pending}
+            nullable
+            render={(v) => (v === null ? "auto" : String(v))}
+          />
+        ) : (
+          (base.value ?? "auto")
+        )}
       </p>
     </div>
   );
@@ -146,6 +219,7 @@ function InlineNumber({
   value,
   suffix = "ft.",
   nullable = true,
+  canManage,
 }: {
   characterId: string;
   label: string;
@@ -153,21 +227,27 @@ function InlineNumber({
   value: number | null;
   suffix?: string;
   nullable?: boolean;
+  canManage: boolean;
 }) {
   const state = useOptimisticField(value, (next) =>
     patchCharacter(characterId, { [field]: next }),
   );
+  const render = (v: number | null) => (v === null ? "—" : `${v} ${suffix}`);
   return (
     <span className="inline-flex items-center gap-1">
       <span className="text-muted-foreground">{label}</span>
-      <EditableNumber
-        label={label}
-        value={state.value}
-        onCommit={state.set}
-        pending={state.pending}
-        nullable={nullable}
-        render={(v) => (v === null ? "—" : `${v} ${suffix}`)}
-      />
+      {canManage ? (
+        <EditableNumber
+          label={label}
+          value={state.value}
+          onCommit={state.set}
+          pending={state.pending}
+          nullable={nullable}
+          render={render}
+        />
+      ) : (
+        render(value)
+      )}
     </span>
   );
 }
@@ -178,12 +258,14 @@ function InlineText({
   field,
   value,
   multiline = true,
+  canManage,
 }: {
   characterId: string;
   label: string;
   field: string;
   value: string | null;
   multiline?: boolean;
+  canManage: boolean;
 }) {
   const state = useOptimisticField(value, (next) =>
     patchCharacter(characterId, { [field]: next }),
@@ -191,14 +273,26 @@ function InlineText({
   return (
     <div>
       <p className="text-muted-foreground text-xs font-medium">{label}</p>
-      <EditableText
-        label={label}
-        value={state.value}
-        onCommit={state.set}
-        pending={state.pending}
-        multiline={multiline}
-        className="text-sm"
-      />
+      {canManage ? (
+        <EditableText
+          label={label}
+          value={state.value}
+          onCommit={state.set}
+          pending={state.pending}
+          multiline={multiline}
+          className="text-sm"
+        />
+      ) : (
+        <p
+          className={
+            value
+              ? "text-sm whitespace-pre-wrap"
+              : "text-muted-foreground text-sm italic"
+          }
+        >
+          {value ?? `No ${label.toLowerCase()}.`}
+        </p>
+      )}
     </div>
   );
 }
@@ -208,15 +302,24 @@ function ToggleField({
   label,
   field,
   value,
+  canManage,
 }: {
   characterId: string;
   label: string;
   field: string;
   value: boolean;
+  canManage: boolean;
 }) {
   const state = useOptimisticField(value, (next) =>
     patchCharacter(characterId, { [field]: next }),
   );
+  if (!canManage) {
+    return (
+      <span className="text-sm">
+        {label}: {value ? "yes" : "no"}
+      </span>
+    );
+  }
   return (
     <EditableToggle
       label={label}
@@ -233,10 +336,12 @@ export function ProgressBadges({
   characterId,
   inspiration,
   experiencePoints,
+  canManage,
 }: {
   characterId: string;
   inspiration: boolean;
   experiencePoints: number;
+  canManage: boolean;
 }) {
   const inspired = useOptimisticField(inspiration, (next) =>
     patchCharacter(characterId, { inspiration: next }),
@@ -244,6 +349,17 @@ export function ProgressBadges({
   const xp = useOptimisticField(experiencePoints, (next) =>
     patchCharacter(characterId, { experiencePoints: next }),
   );
+
+  if (!canManage) {
+    return (
+      <>
+        <Badge variant="secondary">XP {xp.value}</Badge>
+        <Badge variant={inspired.value ? "default" : "secondary"}>
+          {inspired.value ? "Inspired" : "No inspiration"}
+        </Badge>
+      </>
+    );
+  }
 
   return (
     <>
@@ -281,10 +397,12 @@ export function CombatSection({
   characterId,
   sheet,
   derived,
+  canManage,
 }: {
   characterId: string;
   sheet: CharacterSheet;
   derived: DerivedStats;
+  canManage: boolean;
 }) {
   const currentHp = useOptimisticField(sheet.currentHitPoints, (next) =>
     patchCharacter(characterId, { currentHitPoints: next }),
@@ -310,21 +428,26 @@ export function CombatSection({
           <div className="rounded-lg border p-3 text-center">
             <p className="text-muted-foreground text-xs">Hit Points</p>
             <p className="mt-1 text-lg font-semibold">
-              <EditableNumber
-                label="Current hit points"
-                value={currentHp.value}
-                onCommit={(next) => next !== null && currentHp.set(next)}
-                pending={currentHp.pending}
-                // The API only floors PATCH at 0; the create path caps current
-                // HP at max + temp, so hold that same rule here.
-                max={sheet.maxHitPoints + sheet.temporaryHitPoints}
-              />
+              {canManage ? (
+                <EditableNumber
+                  label="Current hit points"
+                  value={currentHp.value}
+                  onCommit={(next) => next !== null && currentHp.set(next)}
+                  pending={currentHp.pending}
+                  // The API only floors PATCH at 0; the create path caps current
+                  // HP at max + temp, so hold that same rule here.
+                  max={sheet.maxHitPoints + sheet.temporaryHitPoints}
+                />
+              ) : (
+                currentHp.value
+              )}
               <span className="text-muted-foreground">/</span>
               <EditableNumberField
                 characterId={characterId}
                 label="Maximum hit points"
                 field="maxHitPoints"
                 value={sheet.maxHitPoints}
+                canManage={canManage}
               />
             </p>
             <p className="text-muted-foreground mt-1 text-xs">
@@ -334,6 +457,7 @@ export function CombatSection({
                 label="Temporary hit points"
                 field="temporaryHitPoints"
                 value={sheet.temporaryHitPoints}
+                canManage={canManage}
               />{" "}
               · max mod{" "}
               <EditableNumberField
@@ -342,14 +466,15 @@ export function CombatSection({
                 field="hitPointMaxModifier"
                 value={sheet.hitPointMaxModifier}
                 min={undefined}
+                canManage={canManage}
               />
             </p>
           </div>
-          <EditableStat
+          <ArmorClassStat
             characterId={characterId}
-            label="Armor Class"
-            field="armorClass"
-            value={sheet.armorClass}
+            armorClass={derived.armorClass}
+            baseArmorClass={sheet.baseArmorClass}
+            canManage={canManage}
           />
           <Stat label="Initiative" value={formatModifier(derived.initiative)} />
           <EditableStat
@@ -357,6 +482,7 @@ export function CombatSection({
             label="Speed"
             field="speed"
             value={sheet.speed}
+            canManage={canManage}
           />
           <Stat label="Passive Perception" value={derived.passivePerception} />
           <Stat
@@ -373,28 +499,43 @@ export function CombatSection({
                 <span className="text-muted-foreground w-16 text-xs">
                   Successes
                 </span>
-                <TickBoxes
-                  count={DEATH_SAVE_MAX}
-                  filled={successes.value}
-                  onSet={successes.set}
-                  pending={successes.pending}
-                  groupLabel={`Death save successes, ${successes.value} of ${DEATH_SAVE_MAX}`}
-                  boxLabel={(index) => `Death save success ${index + 1}`}
-                />
+                {canManage ? (
+                  <TickBoxes
+                    count={DEATH_SAVE_MAX}
+                    filled={successes.value}
+                    onSet={successes.set}
+                    pending={successes.pending}
+                    groupLabel={`Death save successes, ${successes.value} of ${DEATH_SAVE_MAX}`}
+                    boxLabel={(index) => `Death save success ${index + 1}`}
+                  />
+                ) : (
+                  <ReadOnlyTicks
+                    count={DEATH_SAVE_MAX}
+                    filled={successes.value}
+                  />
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground w-16 text-xs">
                   Failures
                 </span>
-                <TickBoxes
-                  count={DEATH_SAVE_MAX}
-                  filled={failures.value}
-                  onSet={failures.set}
-                  pending={failures.pending}
-                  groupLabel={`Death save failures, ${failures.value} of ${DEATH_SAVE_MAX}`}
-                  boxLabel={(index) => `Death save failure ${index + 1}`}
-                  fillClass="bg-destructive border-destructive"
-                />
+                {canManage ? (
+                  <TickBoxes
+                    count={DEATH_SAVE_MAX}
+                    filled={failures.value}
+                    onSet={failures.set}
+                    pending={failures.pending}
+                    groupLabel={`Death save failures, ${failures.value} of ${DEATH_SAVE_MAX}`}
+                    boxLabel={(index) => `Death save failure ${index + 1}`}
+                    fillClass="bg-destructive border-destructive"
+                  />
+                ) : (
+                  <ReadOnlyTicks
+                    count={DEATH_SAVE_MAX}
+                    filled={failures.value}
+                    fillClass="bg-destructive border-destructive"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -408,24 +549,28 @@ export function CombatSection({
             label="Fly"
             field="flySpeed"
             value={sheet.flySpeed}
+            canManage={canManage}
           />
           <InlineNumber
             characterId={characterId}
             label="Swim"
             field="swimSpeed"
             value={sheet.swimSpeed}
+            canManage={canManage}
           />
           <InlineNumber
             characterId={characterId}
             label="Climb"
             field="climbSpeed"
             value={sheet.climbSpeed}
+            canManage={canManage}
           />
           <InlineNumber
             characterId={characterId}
             label="Darkvision"
             field="darkvision"
             value={sheet.darkvision}
+            canManage={canManage}
           />
         </div>
       </CardContent>
@@ -442,6 +587,7 @@ function EditableNumberField({
   value,
   min = 0,
   max,
+  canManage,
 }: {
   characterId: string;
   label: string;
@@ -449,10 +595,12 @@ function EditableNumberField({
   value: number;
   min?: number;
   max?: number;
+  canManage: boolean;
 }) {
   const state = useOptimisticField(value, (next) =>
     patchCharacter(characterId, { [field]: next }),
   );
+  if (!canManage) return <>{value}</>;
   return (
     <EditableNumber
       label={label}
@@ -471,10 +619,12 @@ export function AbilitiesSection({
   characterId,
   sheet,
   derived,
+  canManage,
 }: {
   characterId: string;
   sheet: CharacterSheet;
   derived: DerivedStats;
+  canManage: boolean;
 }) {
   return (
     <Card>
@@ -501,6 +651,7 @@ export function AbilitiesSection({
                   value={sheet[ability.score]}
                   min={ABILITY_MIN}
                   max={ABILITY_MAX}
+                  canManage={canManage}
                 />
               </p>
               <p className="text-muted-foreground text-sm tabular-nums">
@@ -516,6 +667,7 @@ export function AbilitiesSection({
                   label="Proficient"
                   field={ability.save}
                   value={sheet[ability.save]}
+                  canManage={canManage}
                 />
               </div>
             </div>
@@ -545,9 +697,11 @@ const COINS: {
 export function CoinSection({
   characterId,
   sheet,
+  canManage,
 }: {
   characterId: string;
   sheet: CharacterSheet;
+  canManage: boolean;
 }) {
   return (
     <Card>
@@ -565,6 +719,7 @@ export function CoinSection({
                   label={coin.label}
                   field={coin.field}
                   value={sheet[coin.field]}
+                  canManage={canManage}
                 />
               </p>
             </div>
@@ -580,9 +735,11 @@ export function CoinSection({
 export function RoleplaySection({
   characterId,
   sheet,
+  canManage,
 }: {
   characterId: string;
   sheet: CharacterSheet;
+  canManage: boolean;
 }) {
   return (
     <Card>
@@ -600,36 +757,42 @@ export function RoleplaySection({
           field="background"
           value={sheet.background}
           multiline={false}
+          canManage={canManage}
         />
         <InlineText
           characterId={characterId}
           label="Description"
           field="description"
           value={sheet.description}
+          canManage={canManage}
         />
         <InlineText
           characterId={characterId}
           label="Personality Traits"
           field="traits"
           value={sheet.traits}
+          canManage={canManage}
         />
         <InlineText
           characterId={characterId}
           label="Ideals"
           field="ideals"
           value={sheet.ideals}
+          canManage={canManage}
         />
         <InlineText
           characterId={characterId}
           label="Bonds"
           field="bonds"
           value={sheet.bonds}
+          canManage={canManage}
         />
         <InlineText
           characterId={characterId}
           label="Flaws"
           field="flaws"
           value={sheet.flaws}
+          canManage={canManage}
         />
       </CardContent>
     </Card>

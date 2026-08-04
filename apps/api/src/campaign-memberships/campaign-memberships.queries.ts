@@ -28,6 +28,18 @@ export function findMembershipById(id: string) {
   return prisma.campaignMembership.findUnique({ where: { id }, select });
 }
 
+// Resolves a self-service "leave campaign" call: the caller's own membership
+// in that campaign, via the compound unique key (same shape isDmOf uses).
+export function findMembershipByCampaignAndPlayer(
+  campaignId: string,
+  playerId: string,
+) {
+  return prisma.campaignMembership.findUnique({
+    where: { campaignId_playerId: { campaignId, playerId } },
+    select,
+  });
+}
+
 export function updateMembership(
   id: string,
   data: Prisma.CampaignMembershipUncheckedUpdateInput,
