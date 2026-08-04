@@ -108,7 +108,7 @@ interface FormState {
   scores: Record<AbilityField, string>;
   saves: Record<SaveField, boolean>;
 
-  armorClass: string;
+  baseArmorClass: string;
   armorClassNote: string;
   hitPoints: string;
   hitDice: string;
@@ -166,7 +166,7 @@ function initialForm(scope: "campaign" | "shared"): FormState {
       wisdomSaveProf: false,
       charismaSaveProf: false,
     },
-    armorClass: "10",
+    baseArmorClass: "",
     armorClassNote: "",
     hitPoints: "",
     hitDice: "",
@@ -279,9 +279,11 @@ export function CreatureWizard({
       }
     }
     if (current === 2) {
-      const ac = optNum(form.armorClass);
-      if (ac === undefined || !Number.isInteger(ac) || ac < 0) {
-        return "Enter armor class (a whole number, 0 or more).";
+      if (form.baseArmorClass.trim()) {
+        const ac = optNum(form.baseArmorClass);
+        if (ac === undefined || !Number.isInteger(ac) || ac < 0) {
+          return "Base armor class must be a whole number, 0 or more.";
+        }
       }
       const hp = optNum(form.hitPoints);
       if (hp === undefined || !Number.isInteger(hp) || hp < 0) {
@@ -356,7 +358,7 @@ export function CreatureWizard({
         form.alignment === "NONE" ? null : (form.alignment as Alignment),
       alignmentNote: optText(form.alignmentNote) ?? null,
 
-      armorClass: optNum(form.armorClass) ?? 10,
+      baseArmorClass: optNum(form.baseArmorClass) ?? null,
       armorClassNote: optText(form.armorClassNote) ?? null,
       hitPoints: optNum(form.hitPoints) ?? 0,
       hitDice: optText(form.hitDice) ?? null,
@@ -823,10 +825,11 @@ function DefenseStep({ form, set }: { form: FormState; set: Setter }) {
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
-          id="armorClass"
-          label="Armor class"
-          value={form.armorClass}
-          onChange={(v) => set("armorClass", v)}
+          id="baseArmorClass"
+          label="Base armor class"
+          value={form.baseArmorClass}
+          onChange={(v) => set("baseArmorClass", v)}
+          placeholder="auto: 10 + Dex"
         />
         <TextField
           id="armorClassNote"
@@ -1052,7 +1055,9 @@ function ReviewStep({
         />
         <ReviewRow
           label="Defense"
-          value={`AC ${form.armorClass || 0} · ${form.hitPoints || 0} HP`}
+          value={`Base AC ${form.baseArmorClass || "auto"} · ${
+            form.hitPoints || 0
+          } HP`}
         />
         <ReviewRow label="Speed" value={speeds} />
         <ReviewRow

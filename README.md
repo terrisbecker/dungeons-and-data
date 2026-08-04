@@ -1,6 +1,6 @@
 # Dungeons and Data
 
-*A frontend/backend monorepo to help dungeon masters manage their game, players, NPCs, and encounters.*
+_A frontend/backend monorepo to help dungeon masters manage their game, players, NPCs, and encounters._
 
 ## Overview
 
@@ -30,7 +30,7 @@ npm install
 
 This is an **npm workspaces monorepo** (`apps/api`, `apps/web`,
 `packages/shared`), so one `npm install` at the repo root installs and links
-everything. 
+everything.
 
 Next, set up your environment files:
 
@@ -88,13 +88,13 @@ locations, and creatures. Stop everything with `Ctrl+C`.
 
 Other useful commands (run from the repo root):
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev:api` / `npm run dev:web` | Run just one app, with auto-reload |
-| `npm run build` | Build both apps for production |
-| `npm run lint` / `npm run format` | Lint / format the repo |
-| `npm run prisma:migrate` | Apply a new database migration |
-| `npm run seed` | Re-run the seed script (safe to repeat) |
+| Command                               | What it does                            |
+| ------------------------------------- | --------------------------------------- |
+| `npm run dev:api` / `npm run dev:web` | Run just one app, with auto-reload      |
+| `npm run build`                       | Build both apps for production          |
+| `npm run lint` / `npm run format`     | Lint / format the repo                  |
+| `npm run prisma:migrate`              | Apply a new database migration          |
+| `npm run seed`                        | Re-run the seed script (safe to repeat) |
 
 **If something doesn't start:** it's almost always a missing `.env` file or
 the database container not running yet. Double check steps 2–4 above

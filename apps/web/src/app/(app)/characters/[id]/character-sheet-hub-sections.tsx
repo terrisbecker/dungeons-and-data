@@ -169,6 +169,47 @@ function EditableStat({
   );
 }
 
+// Armor Class is computed (see derived.armorClass) from equipped armor/
+// shield + Dex, so the headline number stays read-only; a small nullable
+// override underneath sets the fallback used when nothing is equipped
+// (natural armor, homebrew, or any AC the equipment formula can't express).
+function ArmorClassStat({
+  characterId,
+  armorClass,
+  baseArmorClass,
+  canManage,
+}: {
+  characterId: string;
+  armorClass: number;
+  baseArmorClass: number | null;
+  canManage: boolean;
+}) {
+  const base = useOptimisticField(baseArmorClass, (next) =>
+    patchCharacter(characterId, { baseArmorClass: next }),
+  );
+  return (
+    <div className="rounded-lg border p-3 text-center">
+      <p className="text-muted-foreground text-xs">Armor Class</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums">{armorClass}</p>
+      <p className="text-muted-foreground mt-1 text-xs">
+        base{" "}
+        {canManage ? (
+          <EditableNumber
+            label="Base armor class (natural armor / unarmored override)"
+            value={base.value}
+            onCommit={base.set}
+            pending={base.pending}
+            nullable
+            render={(v) => (v === null ? "auto" : String(v))}
+          />
+        ) : (
+          (base.value ?? "auto")
+        )}
+      </p>
+    </div>
+  );
+}
+
 // An inline number in a running line of text ("Fly 30 ft."), clearable when the
 // column is nullable.
 function InlineNumber({
@@ -429,11 +470,10 @@ export function CombatSection({
               />
             </p>
           </div>
-          <EditableStat
+          <ArmorClassStat
             characterId={characterId}
-            label="Armor Class"
-            field="armorClass"
-            value={sheet.armorClass}
+            armorClass={derived.armorClass}
+            baseArmorClass={sheet.baseArmorClass}
             canManage={canManage}
           />
           <Stat label="Initiative" value={formatModifier(derived.initiative)} />

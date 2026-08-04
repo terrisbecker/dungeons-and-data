@@ -387,14 +387,18 @@ model PlayerCharacter {
   charismaSaveProf     Boolean @default(false)
 
   // Combat.
-  // NOTE: proficiencyBonus, initiative, passive scores, spell save DC, and
-  // spell attack bonus are intentionally NOT stored — derive them in the
-  // service layer to avoid drift.
+  // NOTE: proficiencyBonus, initiative, passive scores, spell save DC, spell
+  // attack bonus, and armorClass are intentionally NOT stored — derive them
+  // in the service layer to avoid drift. armorClass is computed from equipped
+  // armor/shield InventoryItems + Dex, following 5e rules; baseArmorClass is
+  // a nullable fallback used when unarmored (null = the standard 10 + Dex
+  // formula) or to hand-set an AC the equipment formula can't express
+  // (natural-armor homebrew, class features like Unarmored Defense).
   maxHitPoints        Int
   currentHitPoints    Int
   temporaryHitPoints  Int @default(0)
   hitPointMaxModifier Int @default(0) // effects that raise/lower max HP
-  armorClass          Int
+  baseArmorClass      Int?
   deathSaveSuccesses  Int @default(0)
   deathSaveFailures   Int @default(0)
 
@@ -663,8 +667,12 @@ model Creature {
   alignment     Alignment?
   alignmentNote String? // "unaligned", "any evil alignment" — beyond the enum
 
-  // Defense
-  armorClass     Int
+  // Defense. armorClass is NOT stored — like PlayerCharacter, it's derived
+  // from equipped armor/shield InventoryItems + Dex (5e rules). baseArmorClass
+  // is the nullable fallback: null = 10 + Dex when unarmored, or a hand-set
+  // number for creatures whose AC the equipment formula can't express (most
+  // monsters — natural armor, or a class-feature-style AC).
+  baseArmorClass Int?
   armorClassNote String? // "natural armor", "18 with mage armor"
   hitPoints      Int // average HP
   hitDice        String? // "18d10 + 36"

@@ -492,7 +492,10 @@ export interface CreateCharacterInput {
   maxHitPoints: number;
   currentHitPoints: number;
   temporaryHitPoints?: number;
-  armorClass: number;
+  // Manual AC fallback/override — armorClass itself is always computed
+  // server-side from equipped armor/shield + Dex (see DerivedStats). null/
+  // omitted = the standard 10 + Dex formula when unarmored.
+  baseArmorClass?: number | null;
   speed?: number;
   flySpeed?: number | null;
   swimSpeed?: number | null;
@@ -523,6 +526,7 @@ export interface DerivedStats {
   abilityModifiers: Record<Ability, number>;
   savingThrows: Record<Ability, number>;
   skills: Record<Skill, number>;
+  armorClass: number;
   passivePerception: number;
   passiveInvestigation: number;
   passiveInsight: number;
@@ -564,7 +568,8 @@ export interface CharacterSheet {
   currentHitPoints: number;
   temporaryHitPoints: number;
   hitPointMaxModifier: number;
-  armorClass: number;
+  // Manual AC fallback/override — the computed value lives at derived.armorClass.
+  baseArmorClass: number | null;
   deathSaveSuccesses: number;
   deathSaveFailures: number;
 
@@ -687,6 +692,7 @@ export interface CreatureDerivedStats {
   abilityModifiers: Record<Ability, number>;
   savingThrows: Record<Ability, number>;
   skills: Record<Skill, number>;
+  armorClass: number;
   passivePerception: number;
   passiveInvestigation: number;
   passiveInsight: number;
@@ -723,7 +729,8 @@ export interface CreatureScalars {
   alignment: Alignment | null;
   alignmentNote: string | null;
 
-  armorClass: number;
+  // Manual AC fallback/override — the computed value lives at derived.armorClass.
+  baseArmorClass: number | null;
   armorClassNote: string | null;
   hitPoints: number;
   hitDice: string | null;
@@ -817,7 +824,6 @@ export interface CreatureStatBlock extends CreatureCore {
 export interface CreateCreatureInput {
   kind: CreatureKind;
   name: string;
-  armorClass: number;
   hitPoints: number;
 
   strength: number;
@@ -833,6 +839,10 @@ export interface CreateCreatureInput {
   typeTags?: string[];
   alignment?: Alignment | null;
   alignmentNote?: string | null;
+  // Manual AC fallback/override — armorClass itself is always computed
+  // server-side from equipped armor/shield + Dex (see CreatureDerivedStats).
+  // null/omitted = the standard 10 + Dex formula when unarmored.
+  baseArmorClass?: number | null;
   armorClassNote?: string | null;
   hitDice?: string | null;
 

@@ -40,9 +40,7 @@ export function CharactersRoster({
   campaign: Campaign;
   characters: CharacterSummary[];
 }) {
-  const memberPlayerIds = new Set(
-    campaign.memberships.map((m) => m.player.id),
-  );
+  const memberPlayerIds = new Set(campaign.memberships.map((m) => m.player.id));
   const charactersByPlayer = new Map<string, CharacterSummary[]>();
   for (const character of characters) {
     if (!character.playerId || !memberPlayerIds.has(character.playerId)) {
@@ -74,7 +72,9 @@ export function CharactersRoster({
           <Card key={m.id}>
             <CardHeader>
               <div className="flex items-center justify-between gap-2">
-                <CardTitle>{m.player.displayName ?? m.player.username}</CardTitle>
+                <CardTitle>
+                  {m.player.displayName ?? m.player.username}
+                </CardTitle>
                 <Badge variant="outline">{ROLE_LABEL[m.role]}</Badge>
               </div>
               <CardDescription>

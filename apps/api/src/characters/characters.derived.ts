@@ -1,4 +1,4 @@
-import type { Ability, Skill } from "@prisma/client";
+import type { Ability, ArmorCategory, Skill } from "@prisma/client";
 
 // Pure derived-value computation for a character. Nothing here is stored in the
 // DB — per CLAUDE.md these are functions of other columns and are computed on
@@ -24,6 +24,16 @@ export interface SaveProficiencies {
   charismaSaveProf: boolean;
 }
 
+// One equipped armor/shield item's satellite stats — the fields computeArmorClass
+// needs, whichever query shape (lean core/list join, or the full sheet join) it
+// was pulled from.
+export interface EquippedArmorPiece {
+  armorCategory: ArmorCategory;
+  baseArmorClass: number;
+  addDexToArmorClass: boolean;
+  maxDexBonus: number | null;
+}
+
 export interface DerivedInput extends AbilityScores, SaveProficiencies {
   classes: {
     className: string;
@@ -31,6 +41,9 @@ export interface DerivedInput extends AbilityScores, SaveProficiencies {
     spellcastingAbility: Ability | null;
   }[];
   skills: { skill: Skill; proficiency: "PROFICIENT" | "EXPERTISE" | "HALF" }[];
+  // null = no manual override; falls back to 10 + Dex modifier when unarmored.
+  baseArmorClass: number | null;
+  equippedArmor: EquippedArmorPiece[];
 }
 
 export interface DerivedStats {
@@ -40,6 +53,7 @@ export interface DerivedStats {
   abilityModifiers: Record<Ability, number>;
   savingThrows: Record<Ability, number>;
   skills: Record<Skill, number>;
+  armorClass: number;
   passivePerception: number;
   passiveInvestigation: number;
   passiveInsight: number;
@@ -81,6 +95,38 @@ export function abilityModifier(score: number): number {
 
 export function totalLevel(classes: { level: number }[]): number {
   return classes.reduce((sum, c) => sum + c.level, 0);
+}
+
+// 5e armor class: the best equipped body armor (light/medium/heavy, Dex
+// applied per its own cap) or the unarmored baseline (a manual
+// baseArmorClass override, e.g. natural armor, or 10 + Dex), whichever is
+// higher — then every equipped shield's bonus stacked on top. A creature/
+// character normally has at most one of each equipped; this doesn't special-
+// case more than that (just takes the best body piece and sums shields), so
+// it degrades gracefully instead of crashing on invalid data.
+export function computeArmorClass(
+  dexMod: number,
+  baseArmorClass: number | null,
+  equippedArmor: EquippedArmorPiece[],
+): number {
+  const unarmored = baseArmorClass ?? 10 + dexMod;
+
+  const bestBodyArmor = equippedArmor
+    .filter((piece) => piece.armorCategory !== "SHIELD")
+    .reduce((best, piece) => {
+      const dexBonus = piece.addDexToArmorClass
+        ? piece.maxDexBonus === null
+          ? dexMod
+          : Math.min(dexMod, piece.maxDexBonus)
+        : 0;
+      return Math.max(best, piece.baseArmorClass + dexBonus);
+    }, -Infinity);
+
+  const shieldBonus = equippedArmor
+    .filter((piece) => piece.armorCategory === "SHIELD")
+    .reduce((sum, piece) => sum + piece.baseArmorClass, 0);
+
+  return Math.max(unarmored, bestBodyArmor) + shieldBonus;
 }
 
 // 5e proficiency bonus by character level. A level-0 (classless) character is
@@ -150,6 +196,11 @@ export function computeDerived(input: DerivedInput): DerivedStats {
     abilityModifiers,
     savingThrows,
     skills,
+    armorClass: computeArmorClass(
+      abilityModifiers.DEX,
+      input.baseArmorClass,
+      input.equippedArmor,
+    ),
     passivePerception: 10 + skills.PERCEPTION,
     passiveInvestigation: 10 + skills.INVESTIGATION,
     passiveInsight: 10 + skills.INSIGHT,

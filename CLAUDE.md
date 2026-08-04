@@ -420,7 +420,7 @@ Models currently defined:
   Occupants attach through explicit join models.
 - **PlayerCharacter** — the hub. Six ability scores as fixed `SmallInt` columns
   (stored as **final** values, post-racial/ASI); per-save proficiency booleans;
-  combat (HP, `hitPointMaxModifier`, AC, death saves); movement
+  combat (HP, `hitPointMaxModifier`, `baseArmorClass`, death saves); movement
   (`speed`/`flySpeed`/`swimSpeed`/`climbSpeed`) and `darkvision`; concentration
   pointer; currency (5e coin types); the four roleplay boxes
   (`traits`/`ideals`/`bonds`/`flaws`); `deletedAt` soft delete. Nullable
@@ -474,11 +474,12 @@ Models currently defined:
   `PlayerCharacter` conventions: `@db.SmallInt` ability scores (1–30 enforced in
   the service layer), six save-proficiency booleans; plus header
   (`size`/`creatureType` enum +
-  free-text `typeTags`/`alignmentNote`), defense (`armorClass`/`hitPoints`/
+  free-text `typeTags`/`alignmentNote`), defense (`baseArmorClass`/`hitPoints`/
   `hitDice`), all movement modes + `hover`, senses (darkvision/blindsight/
   tremorsense/truesight + `blindBeyond`), free-text `languages`/
   `conditionImmunities`. Derived-not-stored discipline as usual (proficiency
-  bonus from CR, save/skill bonuses, passive Perception). Child tables:
+  bonus from CR, save/skill bonuses, passive Perception, armor class). Child
+  tables:
   **StatBlockEntry** (one polymorphic table keyed by `StatBlockEntryCategory` —
   traits/actions/legendary/lair/… as free-text MM prose, text-only for now; add
   structured attack columns later like `Spell`'s combat hooks),
@@ -523,6 +524,14 @@ other columns. Compute these in the service layer:
 - **Total character level** = sum of `CharacterClass.level` (not stored on `PlayerCharacter`).
 - Ability **modifiers** from ability scores; **spell save DC** and **spell
   attack bonus** from `CharacterClass.spellcastingAbility` + prof bonus.
+- **Armor class**, on both `PlayerCharacter` and `Creature` — 5e rules over the
+  owner's _equipped_ `InventoryItem`s: the best equipped body armor (light/
+  medium/heavy, Dex applied per its own cap) or `baseArmorClass` (a nullable
+  fallback: null = 10 + Dex when unarmored, or a hand-set number for AC the
+  equipment formula can't express — natural armor, Barbarian/Monk-style
+  Unarmored Defense), whichever is higher, plus every equipped shield's bonus
+  on top. See `computeArmorClass` in `characters.derived.ts` /
+  `creatures.derived.ts`.
 - Attunement cap (5e allows max 3 attuned items) — enforce in service logic, not the DB.
 
 ## TypeScript / Node / Express / Prisma / Postgres reference
