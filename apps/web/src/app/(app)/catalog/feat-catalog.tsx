@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CreateFeatInput, FeatCatalog } from "@dnd/shared";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Field } from "@/components/form-fields";
+import { EnumSelect, Field } from "@/components/form-fields";
 import { FeatDetail } from "@/components/catalog-detail";
+import {
+  ALL_FILTER,
+  boolFilterItems,
+  CatalogSearchInput,
+  FilterBar,
+  matchesName,
+} from "./catalog-filters";
 import {
   CatalogManager,
   FormActions,
@@ -15,7 +22,52 @@ import {
   postCatalog,
 } from "./catalog-shared";
 
+const REPEATABLE_ITEMS = boolFilterItems("Repeatable", "Not repeatable");
+const GRANTS_ASI_ITEMS = boolFilterItems("Grants ASI", "No");
+
 export function FeatCatalogManager({ rows }: { rows: FeatCatalog[] }) {
+  const [search, setSearch] = useState("");
+  const [repeatable, setRepeatable] = useState(ALL_FILTER);
+  const [grantsAsi, setGrantsAsi] = useState(ALL_FILTER);
+
+  const rowFilter = useCallback(
+    (feat: FeatCatalog) => {
+      if (!matchesName(feat.name, search)) return false;
+      if (
+        repeatable !== ALL_FILTER &&
+        feat.repeatable !== (repeatable === "TRUE")
+      )
+        return false;
+      if (
+        grantsAsi !== ALL_FILTER &&
+        feat.grantsAbilityScoreIncrease !== (grantsAsi === "TRUE")
+      )
+        return false;
+      return true;
+    },
+    [search, repeatable, grantsAsi],
+  );
+
+  const toolbar = (
+    <FilterBar>
+      <CatalogSearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Search feats by name…"
+      />
+      <EnumSelect
+        value={repeatable}
+        onValueChange={setRepeatable}
+        items={REPEATABLE_ITEMS}
+      />
+      <EnumSelect
+        value={grantsAsi}
+        onValueChange={setGrantsAsi}
+        items={GRANTS_ASI_ITEMS}
+      />
+    </FilterBar>
+  );
+
   return (
     <CatalogManager
       topic="feats"
@@ -23,6 +75,8 @@ export function FeatCatalogManager({ rows }: { rows: FeatCatalog[] }) {
       singular="feat"
       rows={rows}
       emptyText="No feats in the catalog yet."
+      toolbar={toolbar}
+      rowFilter={rowFilter}
       renderRow={(feat) => (
         <>
           <span className="font-medium">{feat.name}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type {
@@ -20,13 +20,87 @@ import {
   SpellDetail,
 } from "@/components/catalog-detail";
 import {
+  ALL_FILTER,
+  boolFilterItems,
+  CatalogSearchInput,
+  FilterBar,
+  matchesName,
+  withAll,
+} from "./catalog-filters";
+import {
   CatalogManager,
   FormActions,
   patchCatalog,
   postCatalog,
 } from "./catalog-shared";
 
+const CONCENTRATION_ITEMS = boolFilterItems("Concentration", "No");
+const RITUAL_ITEMS = boolFilterItems("Ritual", "No");
+const LEVEL_ITEMS: Record<string, string> = {
+  [ALL_FILTER]: "All levels",
+  "0": "Cantrip",
+  "1": "Level 1",
+  "2": "Level 2",
+  "3": "Level 3",
+  "4": "Level 4",
+  "5": "Level 5",
+  "6": "Level 6",
+  "7": "Level 7",
+  "8": "Level 8",
+  "9": "Level 9",
+};
+
 export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
+  const [search, setSearch] = useState("");
+  const [level, setLevel] = useState(ALL_FILTER);
+  const [school, setSchool] = useState(ALL_FILTER);
+  const [concentration, setConcentration] = useState(ALL_FILTER);
+  const [ritual, setRitual] = useState(ALL_FILTER);
+
+  const rowFilter = useCallback(
+    (spell: SpellCatalog) => {
+      if (!matchesName(spell.name, search)) return false;
+      if (level !== ALL_FILTER && String(spell.level) !== level) return false;
+      if (school !== ALL_FILTER && (spell.school ?? "NONE") !== school)
+        return false;
+      if (
+        concentration !== ALL_FILTER &&
+        spell.concentration !== (concentration === "TRUE")
+      )
+        return false;
+      if (ritual !== ALL_FILTER && spell.ritual !== (ritual === "TRUE"))
+        return false;
+      return true;
+    },
+    [search, level, school, concentration, ritual],
+  );
+
+  const toolbar = (
+    <FilterBar>
+      <CatalogSearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Search spells by name…"
+      />
+      <EnumSelect value={level} onValueChange={setLevel} items={LEVEL_ITEMS} />
+      <EnumSelect
+        value={school}
+        onValueChange={setSchool}
+        items={withAll(SCHOOLS, "All schools")}
+      />
+      <EnumSelect
+        value={concentration}
+        onValueChange={setConcentration}
+        items={CONCENTRATION_ITEMS}
+      />
+      <EnumSelect
+        value={ritual}
+        onValueChange={setRitual}
+        items={RITUAL_ITEMS}
+      />
+    </FilterBar>
+  );
+
   return (
     <CatalogManager
       topic="spells"
@@ -34,6 +108,8 @@ export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
       singular="spell"
       rows={rows}
       emptyText="No spells in the catalog yet."
+      toolbar={toolbar}
+      rowFilter={rowFilter}
       renderRow={(spell) => (
         <>
           <span className="font-medium">{spell.name}</span>

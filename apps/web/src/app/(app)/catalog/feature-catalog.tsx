@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type {
@@ -16,13 +16,93 @@ import {
   FeatureDetail,
 } from "@/components/catalog-detail";
 import {
+  ALL_FILTER,
+  CatalogSearchInput,
+  FilterBar,
+  matchesName,
+  withAll,
+} from "./catalog-filters";
+import {
   CatalogManager,
   FormActions,
   patchCatalog,
   postCatalog,
 } from "./catalog-shared";
 
+// Subtype/level have no fixed enum (free-text/nullable), so their filter
+// options are derived from whatever values are actually present in `rows`.
+const NONE_VALUE = "__none__";
+
 export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
+  const [search, setSearch] = useState("");
+  const [source, setSource] = useState(ALL_FILTER);
+  const [subtype, setSubtype] = useState(ALL_FILTER);
+  const [level, setLevel] = useState(ALL_FILTER);
+
+  const subtypeItems = useMemo(() => {
+    const values = Array.from(
+      new Set(rows.map((r) => r.subtype).filter((s): s is string => !!s)),
+    ).sort();
+    const items = withAll(
+      Object.fromEntries(values.map((v) => [v, v])),
+      "All subtypes",
+    );
+    if (rows.some((r) => !r.subtype)) items[NONE_VALUE] = "(none)";
+    return items;
+  }, [rows]);
+
+  const levelItems = useMemo(() => {
+    const values = Array.from(
+      new Set(rows.map((r) => r.level).filter((l): l is number => l != null)),
+    ).sort((a, b) => a - b);
+    const items = withAll(
+      Object.fromEntries(values.map((v) => [String(v), `Level ${v}`])),
+      "All levels",
+    );
+    if (rows.some((r) => r.level == null)) items[NONE_VALUE] = "(none)";
+    return items;
+  }, [rows]);
+
+  const rowFilter = useCallback(
+    (feature: FeatureCatalog) => {
+      if (!matchesName(feature.name, search)) return false;
+      if (source !== ALL_FILTER && feature.source !== source) return false;
+      if (subtype !== ALL_FILTER) {
+        if (subtype === NONE_VALUE) {
+          if (feature.subtype) return false;
+        } else if (feature.subtype !== subtype) return false;
+      }
+      if (level !== ALL_FILTER) {
+        if (level === NONE_VALUE) {
+          if (feature.level != null) return false;
+        } else if (String(feature.level) !== level) return false;
+      }
+      return true;
+    },
+    [search, source, subtype, level],
+  );
+
+  const toolbar = (
+    <FilterBar>
+      <CatalogSearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Search features by name…"
+      />
+      <EnumSelect
+        value={source}
+        onValueChange={setSource}
+        items={withAll(SOURCES, "All sources")}
+      />
+      <EnumSelect
+        value={subtype}
+        onValueChange={setSubtype}
+        items={subtypeItems}
+      />
+      <EnumSelect value={level} onValueChange={setLevel} items={levelItems} />
+    </FilterBar>
+  );
+
   return (
     <CatalogManager
       topic="features"
@@ -30,6 +110,8 @@ export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
       singular="feature"
       rows={rows}
       emptyText="No features in the catalog yet."
+      toolbar={toolbar}
+      rowFilter={rowFilter}
       renderRow={(feature) => (
         <>
           <span className="font-medium">{feature.name}</span>

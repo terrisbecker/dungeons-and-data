@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type {
@@ -25,11 +25,22 @@ import {
   WEAPON_CATEGORIES,
 } from "@/components/catalog-detail";
 import {
+  ALL_FILTER,
+  boolFilterItems,
+  CatalogSearchInput,
+  FilterBar,
+  matchesName,
+  withAll,
+} from "./catalog-filters";
+import {
   CatalogManager,
   FormActions,
   patchCatalog,
   postCatalog,
 } from "./catalog-shared";
+
+const MAGIC_ITEMS = boolFilterItems("Magic", "Mundane");
+const ATTUNEMENT_ITEMS = boolFilterItems("Requires", "No");
 
 const WEAPON_PROPERTIES: WeaponProperty[] = [
   "AMMUNITION",
@@ -53,6 +64,55 @@ function optNum(value: string): number | undefined {
 }
 
 export function ItemCatalogManager({ rows }: { rows: ItemCatalog[] }) {
+  const [search, setSearch] = useState("");
+  const [type, setType] = useState(ALL_FILTER);
+  const [rarity, setRarity] = useState(ALL_FILTER);
+  const [magic, setMagic] = useState(ALL_FILTER);
+  const [attunement, setAttunement] = useState(ALL_FILTER);
+
+  const rowFilter = useCallback(
+    (item: ItemCatalog) => {
+      if (!matchesName(item.name, search)) return false;
+      if (type !== ALL_FILTER && item.type !== type) return false;
+      if (rarity !== ALL_FILTER && item.rarity !== rarity) return false;
+      if (magic !== ALL_FILTER && item.isMagic !== (magic === "TRUE"))
+        return false;
+      if (
+        attunement !== ALL_FILTER &&
+        item.requiresAttunement !== (attunement === "TRUE")
+      )
+        return false;
+      return true;
+    },
+    [search, type, rarity, magic, attunement],
+  );
+
+  const toolbar = (
+    <FilterBar>
+      <CatalogSearchInput
+        value={search}
+        onChange={setSearch}
+        placeholder="Search items by name…"
+      />
+      <EnumSelect
+        value={type}
+        onValueChange={setType}
+        items={withAll(TYPES, "All types")}
+      />
+      <EnumSelect
+        value={rarity}
+        onValueChange={setRarity}
+        items={withAll(RARITIES, "All rarities")}
+      />
+      <EnumSelect value={magic} onValueChange={setMagic} items={MAGIC_ITEMS} />
+      <EnumSelect
+        value={attunement}
+        onValueChange={setAttunement}
+        items={ATTUNEMENT_ITEMS}
+      />
+    </FilterBar>
+  );
+
   return (
     <CatalogManager
       topic="items"
@@ -60,6 +120,8 @@ export function ItemCatalogManager({ rows }: { rows: ItemCatalog[] }) {
       singular="item"
       rows={rows}
       emptyText="No items in the catalog yet."
+      toolbar={toolbar}
+      rowFilter={rowFilter}
       renderRow={(item) => (
         <>
           <span className="font-medium">{item.name}</span>

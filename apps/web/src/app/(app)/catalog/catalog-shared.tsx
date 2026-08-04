@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeftIcon, PlusIcon } from "lucide-react";
@@ -75,6 +75,9 @@ export function CatalogManager<TRow extends { id: string }>({
   singular,
   rows,
   emptyText,
+  noMatchText = "No results match your filters.",
+  toolbar,
+  rowFilter,
   renderRow,
   renderForm,
   renderDetail,
@@ -84,6 +87,9 @@ export function CatalogManager<TRow extends { id: string }>({
   singular: string;
   rows: TRow[];
   emptyText: string;
+  noMatchText?: string;
+  toolbar?: React.ReactNode;
+  rowFilter?: (row: TRow) => boolean;
   renderRow: (row: TRow) => React.ReactNode;
   renderForm: (args: {
     editing: TRow | null;
@@ -97,6 +103,14 @@ export function CatalogManager<TRow extends { id: string }>({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // Two-step delete: first click arms the row (Confirm/Cancel), second confirms.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  // Filtering is applied only to what's displayed — `editing` is looked up
+  // against the full `rows` so an in-progress edit never disappears just
+  // because a filter change would exclude that row.
+  const visibleRows = useMemo(
+    () => (rowFilter ? rows.filter(rowFilter) : rows),
+    [rows, rowFilter],
+  );
 
   const editing = rows.find((r) => r.id === editingId) ?? null;
   const formOpen = adding || editing !== null;
@@ -156,6 +170,8 @@ export function CatalogManager<TRow extends { id: string }>({
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {toolbar}
+
           {formOpen && (
             <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
               <p className="text-sm font-medium">
@@ -165,11 +181,13 @@ export function CatalogManager<TRow extends { id: string }>({
             </div>
           )}
 
-          {rows.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{emptyText}</p>
+          {visibleRows.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {rows.length === 0 ? emptyText : noMatchText}
+            </p>
           ) : (
             <ul className="flex flex-col gap-1">
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <li
                   key={row.id}
                   className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
