@@ -6,6 +6,7 @@ const select = {
   itemId: true,
   characterId: true,
   creatureId: true,
+  locationId: true,
   quantity: true,
   equipped: true,
   attuned: true,
@@ -16,6 +17,7 @@ const select = {
       type: true,
       rarity: true,
       requiresAttunement: true,
+      baseValueCp: true,
     },
   },
 } satisfies Prisma.InventoryItemSelect;

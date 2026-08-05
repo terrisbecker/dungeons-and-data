@@ -154,11 +154,12 @@ export function creatureIdOfDamageModifier(id: string) {
   );
 }
 
-// InventoryItem is polymorphic: exactly one of characterId / creatureId is set.
+// InventoryItem is polymorphic: exactly one of characterId / creatureId /
+// locationId is set.
 export function getInventoryItemOwner(id: string) {
   return prisma.inventoryItem.findUnique({
     where: { id },
-    select: { characterId: true, creatureId: true },
+    select: { characterId: true, creatureId: true, locationId: true },
   });
 }
 

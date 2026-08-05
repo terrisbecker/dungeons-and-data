@@ -5,11 +5,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getMe } from "@/lib/api";
+import { getCampaignEconomySettings, getMe } from "@/lib/api";
 import { canManageCampaign, loadCampaign } from "../campaign-data";
 import { ComingSoon } from "../coming-soon";
 import { CampaignSettingsForm } from "./campaign-settings-form";
 import { DeleteCampaignDialog } from "./delete-campaign-dialog";
+import { EconomySettingsForm } from "./economy-settings-form";
 
 export default async function CampaignSettingsPage({
   params,
@@ -28,6 +29,8 @@ export default async function CampaignSettingsPage({
     );
   }
 
+  const economySettings = await getCampaignEconomySettings(campaign.id);
+
   return (
     <div className="mx-auto grid w-full max-w-2xl gap-4">
       <Card>
@@ -39,6 +42,24 @@ export default async function CampaignSettingsPage({
         </CardHeader>
         <CardContent>
           <CampaignSettingsForm campaign={campaign} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Economy</CardTitle>
+          <CardDescription>
+            Supply/demand pricing for building inventories. Off by default —
+            when on, every building&rsquo;s buy/sell prices react to its
+            location&rsquo;s supply/demand sliders, clamped to the floor/ceiling
+            below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EconomySettingsForm
+            campaignId={campaign.id}
+            settings={economySettings}
+          />
         </CardContent>
       </Card>
 

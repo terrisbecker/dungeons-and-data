@@ -1,6 +1,17 @@
 import { notFound, redirect } from "next/navigation";
-import type { LocationDetail, LocationRow } from "@dnd/shared";
-import { ApiRequestError, getLocation } from "@/lib/api";
+import type {
+  BuildingInventoryItem,
+  LocationDetail,
+  LocationItemTypeEconomy,
+  LocationRow,
+} from "@dnd/shared";
+import {
+  ApiRequestError,
+  getLocation,
+  getLocationBuildingInventory,
+  getLocationItemTypeEconomies,
+} from "@/lib/api";
+import { isBuildingType } from "@/lib/location-labels";
 import { LocationsBrowser } from "../locations-browser";
 import { loadLocationContext } from "../locations-data";
 
@@ -35,12 +46,24 @@ export default async function CampaignLocationPage({
 
   const { all, canManage } = context;
 
+  let buildingInventory: BuildingInventoryItem[] | undefined;
+  if (isBuildingType(current.type)) {
+    buildingInventory = await getLocationBuildingInventory(current.id);
+  }
+
+  let itemTypeEconomies: LocationItemTypeEconomy[] | undefined;
+  if (current.useItemTypeEconomy) {
+    itemTypeEconomies = await getLocationItemTypeEconomies(current.id);
+  }
+
   return (
     <LocationsBrowser
       campaignId={id}
       all={all}
       current={current}
       canManage={canManage}
+      buildingInventory={buildingInventory}
+      itemTypeEconomies={itemTypeEconomies}
     />
   );
 }

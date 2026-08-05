@@ -2,7 +2,9 @@ import { cache } from "react";
 import type {
   ApiError,
   AuthResponse,
+  BuildingInventoryItem,
   Campaign,
+  CampaignEconomySettings,
   CampaignMembership,
   CampaignRole,
   CharacterSheet,
@@ -14,9 +16,11 @@ import type {
   FeatureCatalog,
   ItemCatalog,
   LocationDetail,
+  LocationItemTypeEconomy,
   LocationRow,
   MeResponse,
   SpellCatalog,
+  UpdateCampaignEconomySettingsInput,
   UpdateCampaignInput,
   UpdateMembershipInput,
 } from "@dnd/shared";
@@ -116,6 +120,27 @@ export function deleteCampaign(id: string): Promise<void> {
   return serverFetch<void>(`/campaigns/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// The economy engine's on/off toggle + global floor/ceiling for a campaign
+// (GET/PATCH /campaign-economy-settings/:campaignId). GET returns defaults,
+// not a 404, when the campaign hasn't saved settings yet.
+export function getCampaignEconomySettings(
+  campaignId: string,
+): Promise<CampaignEconomySettings> {
+  return serverFetch<CampaignEconomySettings>(
+    `/campaign-economy-settings/${encodeURIComponent(campaignId)}`,
+  );
+}
+
+export function updateCampaignEconomySettings(
+  campaignId: string,
+  body: UpdateCampaignEconomySettingsInput,
+): Promise<CampaignEconomySettings> {
+  return serverFetch<CampaignEconomySettings>(
+    `/campaign-economy-settings/${encodeURIComponent(campaignId)}`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
 }
 
 // Self-service leave (POST /campaigns/:id/leave) — seats/removes only the
@@ -252,6 +277,28 @@ export function deleteLocation(id: string): Promise<void> {
   return serverFetch<void>(`/locations/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// A building location's stock, with computed buy/sell pricing
+// (GET /inventory-items?locationId=…) — only meaningful for a location whose
+// type is "building" (see isBuildingType() in lib/location-labels.ts).
+export function getLocationBuildingInventory(
+  locationId: string,
+): Promise<BuildingInventoryItem[]> {
+  return serverFetch<BuildingInventoryItem[]>(
+    `/inventory-items?locationId=${encodeURIComponent(locationId)}`,
+  );
+}
+
+// A location's per-ItemType economy overrides (GET /location-item-economy?
+// locationId=…) — only meaningful when the location's useItemTypeEconomy is
+// true; sparse (a type with no row is neutral, 0/0).
+export function getLocationItemTypeEconomies(
+  locationId: string,
+): Promise<LocationItemTypeEconomy[]> {
+  return serverFetch<LocationItemTypeEconomy[]>(
+    `/location-item-economy?locationId=${encodeURIComponent(locationId)}`,
+  );
 }
 
 // Every creature visible from a campaign (GET /creatures). `includeShared`
