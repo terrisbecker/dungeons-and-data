@@ -1,5 +1,9 @@
 # Viewing a creature stat block
 
+Every route in this doc requires a Bearer token — see
+[`authentication.md`](./authentication.md) for how to get one. Examples below
+assume `TOKEN` is already set.
+
 A **Creature** is the reusable NPC / Monster profile (one table discriminated by
 `kind` = `NPC` | `MONSTER`). Like the character reads, there are two, so the
 common case stays cheap:
@@ -55,14 +59,17 @@ Start the API (`npm run dev`, default port 3000). First list creatures to get an
 id (the list view is a lightweight summary):
 
 ```bash
-curl -s http://localhost:3000/creatures | jq -r '.[] | "\(.id)  \(.kind)  \(.name)"'
+curl -s http://localhost:3000/creatures \
+  -H "authorization: Bearer $TOKEN" | jq -r '.[] | "\(.id)  \(.kind)  \(.name)"'
 ```
 
 Then fetch one creature's full stat block by id:
 
 ```bash
-CID=$(curl -s http://localhost:3000/creatures | jq -r '.[0].id')
-curl -s "http://localhost:3000/creatures/$CID/sheet" | jq
+CID=$(curl -s http://localhost:3000/creatures \
+  -H "authorization: Bearer $TOKEN" | jq -r '.[0].id')
+curl -s "http://localhost:3000/creatures/$CID/sheet" \
+  -H "authorization: Bearer $TOKEN" | jq
 ```
 
 ## What comes back
@@ -98,15 +105,15 @@ The stat block is a single JSON object with three parts (the core view at
 
 ```bash
 # Derived combat summary (works on the core view too)
-curl -s "http://localhost:3000/creatures/$CID" \
+curl -s "http://localhost:3000/creatures/$CID" -H "authorization: Bearer $TOKEN" \
   | jq '.derived | {proficiencyBonus, initiative, passivePerception, savingThrows}'
 
 # Legendary actions only (sheet only)
-curl -s "http://localhost:3000/creatures/$CID/sheet" \
+curl -s "http://localhost:3000/creatures/$CID/sheet" -H "authorization: Bearer $TOKEN" \
   | jq '[.entries[] | select(.category == "LEGENDARY_ACTION") | .name]'
 
 # Where this creature is found (sheet only)
-curl -s "http://localhost:3000/creatures/$CID/sheet" \
+curl -s "http://localhost:3000/creatures/$CID/sheet" -H "authorization: Bearer $TOKEN" \
   | jq '[.placements[] | {location: .location.locationName, quantity}]'
 ```
 
@@ -126,3 +133,13 @@ curl -s "http://localhost:3000/creatures/$CID/sheet" \
   so moving a shared monster into a campaign you don't run is a **403**. The same
   goes for `PATCH /creatures/:id` with a `campaignId`: the target scope is
   re-checked, not just the creature's current one.
+
+## See also
+
+- [`authentication.md`](./authentication.md) — getting a token, roles.
+- [`character-sheet.md`](./character-sheet.md) — the same core/sheet read
+  pattern for `PlayerCharacter`; `InventoryItem` rows are structurally
+  identical between the two.
+- [`economy-layer.md`](./economy-layer.md) — a third `InventoryItem` owner
+  (`locationId`, a building's stock) that layers computed buy/sell pricing
+  on top of the same join row shape described here.

@@ -1,5 +1,9 @@
 # Viewing a character sheet
 
+Every route in this doc requires a Bearer token — see
+[`authentication.md`](./authentication.md) for how to get one. Examples below
+assume `TOKEN` is already set.
+
 There are two character reads, so the common case stays cheap:
 
 - **`GET /characters/:id`** — the **core** view: stored columns + `classes` +
@@ -33,20 +37,24 @@ Start the API (`npm run dev`, default port 3000). First list characters to get
 an id (the list view is a lightweight summary):
 
 ```bash
-curl -s http://localhost:3000/characters | jq -r '.[] | "\(.id)  \(.characterName)"'
+curl -s http://localhost:3000/characters \
+  -H "authorization: Bearer $TOKEN" | jq -r '.[] | "\(.id)  \(.characterName)"'
 ```
 
 Then fetch one character's full sheet by id:
 
 ```bash
-curl -s http://localhost:3000/characters/<id>/sheet | jq
+curl -s "http://localhost:3000/characters/<id>/sheet" \
+  -H "authorization: Bearer $TOKEN" | jq
 ```
 
 Example — pull an id and fetch the sheet in one line:
 
 ```bash
-CID=$(curl -s http://localhost:3000/characters | jq -r '.[0].id')
-curl -s "http://localhost:3000/characters/$CID/sheet" | jq
+CID=$(curl -s http://localhost:3000/characters \
+  -H "authorization: Bearer $TOKEN" | jq -r '.[0].id')
+curl -s "http://localhost:3000/characters/$CID/sheet" \
+  -H "authorization: Bearer $TOKEN" | jq
 ```
 
 ## What comes back
@@ -91,15 +99,15 @@ The sheet is a single JSON object with three parts (the core view at
 
 ```bash
 # Just the derived combat/casting summary (works on the core view too)
-curl -s "http://localhost:3000/characters/$CID" \
+curl -s "http://localhost:3000/characters/$CID" -H "authorization: Bearer $TOKEN" \
   | jq '.derived | {totalLevel, proficiencyBonus, initiative, passivePerception, spellcasting}'
 
 # Equipped inventory (sheet only)
-curl -s "http://localhost:3000/characters/$CID/sheet" \
+curl -s "http://localhost:3000/characters/$CID/sheet" -H "authorization: Bearer $TOKEN" \
   | jq '[.inventory[] | select(.equipped) | {item: .item.name, quantity}]'
 
 # Prepared spells (sheet only)
-curl -s "http://localhost:3000/characters/$CID/sheet" \
+curl -s "http://localhost:3000/characters/$CID/sheet" -H "authorization: Bearer $TOKEN" \
   | jq '[.spells[] | select(.prepared) | .spell.name]'
 ```
 
@@ -108,3 +116,11 @@ curl -s "http://localhost:3000/characters/$CID/sheet" \
 - Soft-deleted characters (those with `deletedAt` set) return **404** here and
   are excluded from the list endpoint.
 - An unknown id returns **404**; a malformed (non-UUID) id returns **400**.
+
+## See also
+
+- [`authentication.md`](./authentication.md) — getting a token, roles.
+- [`creature-stat-block.md`](./creature-stat-block.md) — the same core/sheet
+  read pattern for `Creature`; `InventoryItem` rows are structurally
+  identical between the two (`components/inventory-rows.tsx` on the
+  frontend renders both).
