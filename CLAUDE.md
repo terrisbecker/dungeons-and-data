@@ -333,6 +333,18 @@ Working on branch `campaign-db/locations`.
     `send`), `lib/skills.ts`,
     `lib/creature-labels.ts`, and `hooks/use-lazy-list.ts` (pickers that fetch
     on first open).
+- **Economy layer** (`campaign-economy-settings/`, `item-economy-configs/`,
+  `location-item-economy/`) — a supply/demand pricing engine layered on top of
+  `Item.baseValueCp`. A DM sets per-campaign global supply/demand sliders on
+  `Location` (or, for `type: "building"` locations only, 18 independent
+  per-`ItemType` slider pairs); modifiers stack additively up the location
+  hierarchy, are scaled by a per-`ItemType` `demandSlope` constant, and are
+  clamped to a per-campaign floor/ceiling percentage of `baseValueCp`. Pricing
+  is computed live on every read (never stored) and surfaces only on a
+  building's `InventoryItem` rows (a third polymorphic owner, `locationId`,
+  alongside `characterId`/`creatureId`) as `pricing: { buyValueCp,
+  sellValueCp }`. Full pricing formula, data model, API reference, and
+  frontend (economy sliders + building inventory) in `docs/economy-layer.md`.
 - **Docker:** `docker-compose.yml` (Postgres 17), `Dockerfile` (multi-stage app
   image), `.dockerignore`.
 - Config: `tsconfig.json`, `eslint.config.mjs` (adds
@@ -342,8 +354,6 @@ Working on branch `campaign-db/locations`.
 
 **Not yet done:**
 
-- No economy/pricing layer (shops, chests, buy/sell modifiers, currency
-  conversion) on top of the `Item.baseValueCp` catalog reference value.
 - No pagination. Auth is JWT-only (no refresh tokens, no revocation/blocklist —
   a token stays valid until it expires even if the account is later demoted).
 - No tests, no CI.

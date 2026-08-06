@@ -4,6 +4,12 @@ Every route except `GET /health`, `POST /auth/register`, and `POST /auth/login`
 requires a **JWT** sent in an `Authorization: Bearer <token>` header. You get a
 token by registering or logging in, then attach it to every subsequent request.
 
+This doc talks directly to the API with `curl` — useful for testing and for
+any non-browser client. The web app (`apps/web`) never sends the Bearer header
+from the browser; it stores the JWT server-side in an httpOnly cookie via a
+BFF. See [`frontend.md`](./frontend.md#how-auth-works-bff--httponly-cookie)
+for that flow.
+
 ## Setup
 
 The API needs `JWT_SECRET` set (it fails fast on startup otherwise). Copy the
@@ -174,3 +180,11 @@ CORS_ORIGIN="http://localhost:5173,https://app.example.com"
 
 Tokens expire after `JWT_EXPIRES_IN` (default `7d`); there is no refresh or
 revocation yet, so a token stays valid until it expires.
+
+## See also
+
+- [`frontend.md`](./frontend.md) — how the web app wraps this JWT flow in a
+  BFF + httpOnly cookie so the browser never sees the token.
+- [`character-sheet.md`](./character-sheet.md) /
+  [`creature-stat-block.md`](./creature-stat-block.md) — worked examples that
+  build on the token from this doc.

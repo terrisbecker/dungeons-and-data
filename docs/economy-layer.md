@@ -222,3 +222,11 @@ check.
 - Pricing is computed on every read of a location-owned `InventoryItem` row
   (list or single), not cached or stored — it always reflects the current
   sliders, campaign settings, and demand slopes.
+
+## See also
+
+- [`authentication.md`](./authentication.md) — the DM/Admin guard tiers
+  referenced throughout the API reference table above.
+- [`creature-stat-block.md`](./creature-stat-block.md) — the `characterId`/
+  `creatureId` `InventoryItem` owners this doc's `locationId` owner sits
+  alongside.

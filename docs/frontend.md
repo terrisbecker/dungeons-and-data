@@ -183,9 +183,35 @@ Admin or that campaign's DM; shared rows: Admin or a DM of any campaign) and
 decide whether the write controls render at all. Any authed user can still read
 every creature — the API guards remain the enforcement point.
 
+## Catalog management (`/catalog` and `/campaigns/[id]/catalog`)
+
+`apps/web/src/app/(app)/catalog/catalog-page-content.tsx` is a full **CRUD**
+manager for the four shared catalogs (Item/Spell/Feat/Feature) — inline edit
+plus a two-step arm/confirm delete — not a read-only browser. It's gated to
+Admin/DM (`getMe()` + a `canManage` check, redirecting non-managers to
+`/dashboard`) and rendered from **two routes that share the same component**:
+`(app)/catalog/[type]/page.tsx` (reached from the dashboard) and
+`(app)/campaigns/[id]/catalog/[type]/page.tsx` (nested under a campaign's
+sidebar, passing `backHref: null` since the campaign sidebar already has its
+own "back" link). Because catalogs aren't campaign-scoped, both routes read
+and write the exact same rows — the nesting is purely navigational.
+
 ## The API contract
 
 Shared response types live in `packages/shared` (`@dnd/shared`) — e.g.
 `MeResponse`, `AuthResponse`, `PlayerPublic`. It is **type-only** (no build step;
 erased at compile time) and mirrors the API's `select` projections. Add new DTOs
 there as feature pages are built so both apps stay in sync.
+
+## See also
+
+- [`authentication.md`](./authentication.md) — the underlying JWT/role model
+  the BFF cookie wraps.
+- [`character-sheet.md`](./character-sheet.md) /
+  [`creature-stat-block.md`](./creature-stat-block.md) — the API shapes the
+  interactive sheet and stat block render.
+- [`economy-layer.md`](./economy-layer.md) — the location supply/demand
+  sliders and building inventory pricing UI under
+  `campaigns/[id]/locations/` and `campaigns/[id]/settings/`.
+- [`frontend-gaps.md`](./frontend-gaps.md) — known gaps and rough edges not
+  yet tracked in the root `CLAUDE.md`.
