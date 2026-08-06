@@ -81,6 +81,7 @@ export function CatalogManager<TRow extends { id: string }>({
   renderRow,
   renderForm,
   renderDetail,
+  backHref = "/dashboard",
 }: {
   topic: string;
   title: string;
@@ -96,6 +97,9 @@ export function CatalogManager<TRow extends { id: string }>({
     close: () => void;
   }) => React.ReactNode;
   renderDetail?: (row: TRow) => React.ReactNode;
+  // Nested under a campaign, the sidebar's own "Back to dashboard" link
+  // already covers this — pass null to omit the in-page one.
+  backHref?: string | null;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -138,17 +142,19 @@ export function CatalogManager<TRow extends { id: string }>({
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link href="/dashboard" />}
-        >
-          <ChevronLeftIcon />
-          Back to dashboard
-        </Button>
-      </div>
+      {backHref && (
+        <div className="mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<Link href={backHref} />}
+          >
+            <ChevronLeftIcon />
+            Back to dashboard
+          </Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

@@ -63,7 +63,13 @@ function optNum(value: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function ItemCatalogManager({ rows }: { rows: ItemCatalog[] }) {
+export function ItemCatalogManager({
+  rows,
+  backHref,
+}: {
+  rows: ItemCatalog[];
+  backHref?: string | null;
+}) {
   const [search, setSearch] = useState("");
   const [type, setType] = useState(ALL_FILTER);
   const [rarity, setRarity] = useState(ALL_FILTER);
@@ -121,6 +127,7 @@ export function ItemCatalogManager({ rows }: { rows: ItemCatalog[] }) {
       rows={rows}
       emptyText="No items in the catalog yet."
       toolbar={toolbar}
+      backHref={backHref}
       rowFilter={rowFilter}
       renderRow={(item) => (
         <>

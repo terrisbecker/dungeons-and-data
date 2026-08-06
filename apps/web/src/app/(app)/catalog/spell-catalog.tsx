@@ -50,7 +50,13 @@ const LEVEL_ITEMS: Record<string, string> = {
   "9": "Level 9",
 };
 
-export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
+export function SpellCatalogManager({
+  rows,
+  backHref,
+}: {
+  rows: SpellCatalog[];
+  backHref?: string | null;
+}) {
   const [search, setSearch] = useState("");
   const [level, setLevel] = useState(ALL_FILTER);
   const [school, setSchool] = useState(ALL_FILTER);
@@ -109,6 +115,7 @@ export function SpellCatalogManager({ rows }: { rows: SpellCatalog[] }) {
       rows={rows}
       emptyText="No spells in the catalog yet."
       toolbar={toolbar}
+      backHref={backHref}
       rowFilter={rowFilter}
       renderRow={(spell) => (
         <>

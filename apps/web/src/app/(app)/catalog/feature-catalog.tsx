@@ -33,7 +33,13 @@ import {
 // options are derived from whatever values are actually present in `rows`.
 const NONE_VALUE = "__none__";
 
-export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
+export function FeatureCatalogManager({
+  rows,
+  backHref,
+}: {
+  rows: FeatureCatalog[];
+  backHref?: string | null;
+}) {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState(ALL_FILTER);
   const [subtype, setSubtype] = useState(ALL_FILTER);
@@ -111,6 +117,7 @@ export function FeatureCatalogManager({ rows }: { rows: FeatureCatalog[] }) {
       rows={rows}
       emptyText="No features in the catalog yet."
       toolbar={toolbar}
+      backHref={backHref}
       rowFilter={rowFilter}
       renderRow={(feature) => (
         <>

@@ -25,7 +25,13 @@ import {
 const REPEATABLE_ITEMS = boolFilterItems("Repeatable", "Not repeatable");
 const GRANTS_ASI_ITEMS = boolFilterItems("Grants ASI", "No");
 
-export function FeatCatalogManager({ rows }: { rows: FeatCatalog[] }) {
+export function FeatCatalogManager({
+  rows,
+  backHref,
+}: {
+  rows: FeatCatalog[];
+  backHref?: string | null;
+}) {
   const [search, setSearch] = useState("");
   const [repeatable, setRepeatable] = useState(ALL_FILTER);
   const [grantsAsi, setGrantsAsi] = useState(ALL_FILTER);
@@ -75,6 +81,7 @@ export function FeatCatalogManager({ rows }: { rows: FeatCatalog[] }) {
       singular="feat"
       rows={rows}
       emptyText="No feats in the catalog yet."
+      backHref={backHref}
       toolbar={toolbar}
       rowFilter={rowFilter}
       renderRow={(feat) => (
