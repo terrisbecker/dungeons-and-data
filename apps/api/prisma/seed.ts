@@ -860,18 +860,26 @@ async function seedLocations() {
             locationName: "Silverpine Forest",
             type: "region",
             description: "Ancient pine woods, home to elves and worse.",
+            // Economy demo: high demand, light supply out here in the woods —
+            // stacks with Thornwick and The Gilded Anvil below to show the
+            // modifier accumulating down the hierarchy.
+            demandLevel: 6,
+            supplyLevel: 2,
             children: {
               create: [
                 {
                   locationName: "Thornwick",
                   type: "town",
                   description: "A walled trading town on the forest's edge.",
+                  demandLevel: 3,
+                  supplyLevel: 1,
                   children: {
                     create: [
                       {
                         locationName: "The Gilded Anvil",
                         type: "building",
                         description: "The town smithy and general store.",
+                        demandLevel: 4,
                       },
                     ],
                   },
@@ -913,6 +921,59 @@ async function seedLocations() {
 }
 
 type Locations = Awaited<ReturnType<typeof seedLocations>>;
+
+// Stocks "The Gilded Anvil" (a `type: "building"` location) with a few
+// catalog items owned via InventoryItem.locationId — the economy layer's
+// building inventory. Cascade-deleted along with the location on re-seed.
+async function seedBuildingInventory(cat: Catalog, loc: Locations) {
+  const anvilId = loc["The Gilded Anvil"];
+  await prisma.inventoryItem.createMany({
+    data: [
+      { itemId: cat.items["Dagger"], locationId: anvilId, quantity: 8 },
+      { itemId: cat.items["Mace"], locationId: anvilId, quantity: 3 },
+      {
+        itemId: cat.items["Potion of Healing"],
+        locationId: anvilId,
+        quantity: 12,
+      },
+    ],
+  });
+}
+
+// One row per ItemType — the demand-slope curve parameter the economy engine
+// uses to convert a location's slider deltas into a price modifier (see
+// inventory-items.derived.ts). Cheaper/common goods swing more per slider
+// step (lower slope); rarer magic items are dampened (higher slope).
+const DEMAND_SLOPES: Partial<Record<ItemType, number>> = {
+  [ItemType.ADVENTURING_GEAR]: 1,
+  [ItemType.POTION]: 1,
+  [ItemType.SCROLL]: 1,
+  [ItemType.FOOD_AND_DRINK]: 1,
+  [ItemType.TRADE_GOOD]: 1,
+  [ItemType.AMMUNITION]: 2,
+  [ItemType.TOOL]: 2,
+  [ItemType.CONTAINER]: 2,
+  [ItemType.WEAPON]: 5,
+  [ItemType.ARMOR]: 5,
+  [ItemType.MOUNT_OR_VEHICLE]: 5,
+  [ItemType.WAND]: 10,
+  [ItemType.ROD]: 10,
+  [ItemType.STAFF]: 10,
+  [ItemType.RING]: 10,
+  [ItemType.WONDROUS_ITEM]: 10,
+  [ItemType.TREASURE]: 10,
+  [ItemType.OTHER]: 2,
+};
+
+async function seedItemEconomyConfigs() {
+  for (const itemType of Object.values(ItemType)) {
+    await prisma.itemTypeEconomyConfig.upsert({
+      where: { itemType },
+      update: { demandSlope: DEMAND_SLOPES[itemType] ?? 2 },
+      create: { itemType, demandSlope: DEMAND_SLOPES[itemType] ?? 2 },
+    });
+  }
+}
 
 // Seeds the Creature roster (NPCs + monsters) with the full stat-block graph:
 // StatBlockEntry rows across categories, CreatureSkill, CreatureDamageModifier,
@@ -1442,6 +1503,8 @@ async function main() {
   await seedCharacters(catalog);
   const locations = await seedLocations();
   await seedCreatures(catalog, locations);
+  await seedBuildingInventory(catalog, locations);
+  await seedItemEconomyConfigs();
   const auth = await seedAuth();
 
   // Back-fill ownership so every authorization path is exercisable: the demo
@@ -1458,6 +1521,19 @@ async function main() {
   await prisma.creature.updateMany({
     where: { name: { in: CAMPAIGN_CREATURE_NAMES } },
     data: { campaignId: auth.campaignId },
+  });
+  // Turn the economy engine on for the demo campaign so the building
+  // inventory at The Gilded Anvil shows modified buy/sell prices out of
+  // the box.
+  await prisma.campaignEconomySettings.upsert({
+    where: { campaignId: auth.campaignId },
+    update: { economyEnabled: true, floorPercent: 50, ceilingPercent: 50 },
+    create: {
+      campaignId: auth.campaignId,
+      economyEnabled: true,
+      floorPercent: 50,
+      ceilingPercent: 50,
+    },
   });
 
   const created = await prisma.playerCharacter.findMany({

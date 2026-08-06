@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeftIcon, PlusIcon } from "lucide-react";
@@ -75,21 +75,31 @@ export function CatalogManager<TRow extends { id: string }>({
   singular,
   rows,
   emptyText,
+  noMatchText = "No results match your filters.",
+  toolbar,
+  rowFilter,
   renderRow,
   renderForm,
   renderDetail,
+  backHref = "/dashboard",
 }: {
   topic: string;
   title: string;
   singular: string;
   rows: TRow[];
   emptyText: string;
+  noMatchText?: string;
+  toolbar?: React.ReactNode;
+  rowFilter?: (row: TRow) => boolean;
   renderRow: (row: TRow) => React.ReactNode;
   renderForm: (args: {
     editing: TRow | null;
     close: () => void;
   }) => React.ReactNode;
   renderDetail?: (row: TRow) => React.ReactNode;
+  // Nested under a campaign, the sidebar's own "Back to dashboard" link
+  // already covers this — pass null to omit the in-page one.
+  backHref?: string | null;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -97,6 +107,14 @@ export function CatalogManager<TRow extends { id: string }>({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   // Two-step delete: first click arms the row (Confirm/Cancel), second confirms.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  // Filtering is applied only to what's displayed — `editing` is looked up
+  // against the full `rows` so an in-progress edit never disappears just
+  // because a filter change would exclude that row.
+  const visibleRows = useMemo(
+    () => (rowFilter ? rows.filter(rowFilter) : rows),
+    [rows, rowFilter],
+  );
 
   const editing = rows.find((r) => r.id === editingId) ?? null;
   const formOpen = adding || editing !== null;
@@ -124,17 +142,19 @@ export function CatalogManager<TRow extends { id: string }>({
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 p-6">
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          nativeButton={false}
-          render={<Link href="/dashboard" />}
-        >
-          <ChevronLeftIcon />
-          Back to dashboard
-        </Button>
-      </div>
+      {backHref && (
+        <div className="mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<Link href={backHref} />}
+          >
+            <ChevronLeftIcon />
+            Back to dashboard
+          </Button>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -156,6 +176,8 @@ export function CatalogManager<TRow extends { id: string }>({
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {toolbar}
+
           {formOpen && (
             <div className="bg-muted/30 flex flex-col gap-3 rounded-lg border p-4">
               <p className="text-sm font-medium">
@@ -165,11 +187,13 @@ export function CatalogManager<TRow extends { id: string }>({
             </div>
           )}
 
-          {rows.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{emptyText}</p>
+          {visibleRows.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {rows.length === 0 ? emptyText : noMatchText}
+            </p>
           ) : (
             <ul className="flex flex-col gap-1">
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <li
                   key={row.id}
                   className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"

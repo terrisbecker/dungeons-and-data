@@ -14,8 +14,12 @@ export async function postInventoryItem(req: Request, res: Response) {
 }
 
 export async function getInventoryItems(req: Request, res: Response) {
-  const { characterId, creatureId } = req.query;
-  if (characterId === undefined && creatureId === undefined) {
+  const { characterId, creatureId, locationId } = req.query;
+  if (
+    characterId === undefined &&
+    creatureId === undefined &&
+    locationId === undefined
+  ) {
     throw badRequest();
   }
   res.json(
@@ -24,6 +28,8 @@ export async function getInventoryItems(req: Request, res: Response) {
         characterId === undefined ? undefined : requireUuid(characterId),
       creatureId:
         creatureId === undefined ? undefined : requireUuid(creatureId),
+      locationId:
+        locationId === undefined ? undefined : requireUuid(locationId),
     }),
   );
 }

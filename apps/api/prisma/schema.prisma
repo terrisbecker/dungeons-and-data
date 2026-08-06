@@ -291,6 +291,28 @@ model Campaign {
   locations   Location[]
   creatures   Creature[] // campaign-specific creatures; shared ones have null campaignId
 
+  // Economy-engine settings (supply/demand toggle + global floor/ceiling).
+  // Nullable 1:1 — a campaign has no row until its settings are first touched.
+  economySettings CampaignEconomySettings?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// CampaignEconomySettings — 1:1 satellite of Campaign (same PK-as-FK shape as
+// WeaponStats/ArmorStats). Turns the supply/demand economy engine on or off
+// for this campaign and sets the global price floor/ceiling clamp (a single
+// +/-% pair applied to every item type, not configurable per-type).
+// ---------------------------------------------------------------------------
+model CampaignEconomySettings {
+  campaignId String   @id @db.Uuid
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  economyEnabled Boolean @default(false)
+  floorPercent   Int     @default(50) // price can't drop more than this % below base
+  ceilingPercent Int     @default(50) // price can't rise more than this % above base
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -323,6 +345,9 @@ model Location {
   locationName String
   description  String?
   type         String // free text: region, country, city, town, cottage, ...
+  // A location whose (trimmed, lowercased) type equals "building" gets a
+  // building inventory in the frontend — see isBuildingType(). No dedicated
+  // flag; reuses this free-text field per the economy-layer design.
 
   // Owning campaign. Nullable so a shared/template world can exist unscoped;
   // campaign-owned locations cascade-delete with the campaign.
@@ -334,8 +359,21 @@ model Location {
   parent   Location?  @relation("LocationHierarchy", fields: [parentId], references: [id])
   children Location[] @relation("LocationHierarchy")
 
+  // Economy engine: DM-set sliders. A location's contribution to an item
+  // type's price modifier is (demandLevel - supplyLevel) / demandSlope;
+  // modifiers stack additively up the parent chain. See inventory-items.derived.ts.
+  // These global sliders are the fallback for every item type; when
+  // useItemTypeEconomy is true, the LocationItemTypeEconomy rows below take
+  // over instead (a type with no row there is neutral: 0/0, not the global
+  // fallback — the two modes are mutually exclusive per location).
+  supplyLevel         Int     @default(0)
+  demandLevel         Int     @default(0)
+  useItemTypeEconomy  Boolean @default(false)
+
   // Occupants — an explicit join model so each assignment can carry its own data.
   creaturePlacements CreaturePlacement[]
+  inventory          InventoryItem[]
+  itemTypeEconomy    LocationItemTypeEconomy[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -617,6 +655,35 @@ model ArmorStats {
   stealthDisadvantage Boolean       @default(false)
 }
 
+// One row per ItemType enum value — the per-item-type economy curve
+// parameter. The equilibrium-displacement pricing model only needs one
+// configurable constant per type (the demand slope M); see
+// inventory-items.derived.ts for the formula. Backend/seed-managed for now,
+// no dedicated admin UI.
+model ItemTypeEconomyConfig {
+  itemType    ItemType @id
+  demandSlope Decimal  @default(1.0) @db.Decimal(10, 4)
+
+  updatedAt DateTime @updatedAt
+}
+
+// A location's per-ItemType override of its global supply/demand sliders.
+// Only consulted when the owning Location's useItemTypeEconomy is true; a
+// type with no row here is neutral (0/0) in that mode — it does NOT fall
+// back to the location's global supplyLevel/demandLevel (the two modes are
+// exclusive). Sparse by design: a DM only has rows for the types they've
+// actually adjusted.
+model LocationItemTypeEconomy {
+  locationId String   @db.Uuid
+  itemType   ItemType
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  supplyLevel Int @default(0)
+  demandLevel Int @default(0)
+
+  @@id([locationId, itemType])
+}
+
 // One catalog Item assigned to one owner, with per-instance inventory state.
 // Multiple rows for the same itemId = the same item held by different owners
 // (or separate stacks held by the same owner). Exactly one owner FK should be
@@ -626,11 +693,14 @@ model InventoryItem {
   itemId String @db.Uuid
   item   Item   @relation(fields: [itemId], references: [id], onDelete: Restrict)
 
-  // Owner — polymorphic via nullable FKs. Add shopId/chestId here later.
+  // Owner — polymorphic via nullable FKs. A location owner represents stock
+  // in a building's inventory (see docs/economy-layer.md).
   characterId String?          @db.Uuid
   character   PlayerCharacter? @relation(fields: [characterId], references: [id], onDelete: Cascade)
   creatureId  String?          @db.Uuid
   creature    Creature?        @relation(fields: [creatureId], references: [id], onDelete: Cascade)
+  locationId  String?          @db.Uuid
+  location    Location?        @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   // Per-instance state
   quantity Int     @default(1)
@@ -640,6 +710,7 @@ model InventoryItem {
   @@index([itemId])
   @@index([characterId])
   @@index([creatureId])
+  @@index([locationId])
 }
 
 // ---------------------------------------------------------------------------

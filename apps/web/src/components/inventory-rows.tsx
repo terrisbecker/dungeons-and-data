@@ -19,6 +19,29 @@ export interface InventoryRowData {
   equipped: boolean;
   attuned: boolean;
   item: ItemCatalog;
+  // Present only for a building's stock (owner = a location) — the one place
+  // a computed price is ever shown. null means the item is priceless.
+  pricing?: { buyValueCp: number; sellValueCp: number } | null;
+}
+
+function formatCp(cp: number): string {
+  const gp = cp / 100;
+  return `${Number.isInteger(gp) ? gp : gp.toFixed(2)} gp`;
+}
+
+function PricingSpans({
+  pricing,
+}: {
+  pricing: { buyValueCp: number; sellValueCp: number } | null;
+}) {
+  if (!pricing) {
+    return <span className="text-muted-foreground text-xs">Priceless</span>;
+  }
+  return (
+    <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+      Buy {formatCp(pricing.buyValueCp)} · Sell {formatCp(pricing.sellValueCp)}
+    </span>
+  );
 }
 
 // Click-to-open detail for the item. Only the name is the trigger, so the row's
@@ -52,10 +75,14 @@ export function EditableInventoryRow({
   row,
   patch,
   onRemove,
+  // Building stock has no "worn" state — equipped/attuned only apply to a
+  // character/creature owner.
+  showWornState = true,
 }: {
   row: InventoryRowData;
   patch: (id: string, body: unknown) => Promise<boolean>;
   onRemove: (id: string) => Promise<void>;
+  showWornState?: boolean;
 }) {
   const quantity = useOptimisticField(row.quantity, (value) =>
     patch(row.id, { quantity: value }),
@@ -71,6 +98,7 @@ export function EditableInventoryRow({
     <li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border px-3 py-2 text-sm">
       <InventoryItemLabel row={row} />
       <span className="flex shrink-0 items-center gap-4">
+        {row.pricing !== undefined && <PricingSpans pricing={row.pricing} />}
         <EditableNumber
           label="Quantity"
           value={quantity.value}
@@ -79,18 +107,22 @@ export function EditableInventoryRow({
           min={1}
           render={(value) => `×${value ?? 1}`}
         />
-        <EditableToggle
-          label="Equipped"
-          value={equipped.value}
-          onCommit={equipped.set}
-          pending={equipped.pending}
-        />
-        <EditableToggle
-          label="Attuned"
-          value={attuned.value}
-          onCommit={attuned.set}
-          pending={attuned.pending}
-        />
+        {showWornState && (
+          <>
+            <EditableToggle
+              label="Equipped"
+              value={equipped.value}
+              onCommit={equipped.set}
+              pending={equipped.pending}
+            />
+            <EditableToggle
+              label="Attuned"
+              value={attuned.value}
+              onCommit={attuned.set}
+              pending={attuned.pending}
+            />
+          </>
+        )}
         <RemoveButton
           onRemove={() => onRemove(row.id)}
           confirm={`Remove ${row.item.name} from inventory?`}
@@ -110,8 +142,11 @@ export function ReadOnlyInventoryRow({ row }: { row: InventoryRowData }) {
         {row.equipped && <Badge variant="secondary">Equipped</Badge>}
         {row.attuned && <Badge variant="secondary">Attuned</Badge>}
       </span>
-      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-        ×{row.quantity}
+      <span className="flex shrink-0 items-center gap-3">
+        {row.pricing !== undefined && <PricingSpans pricing={row.pricing} />}
+        <span className="text-muted-foreground text-xs tabular-nums">
+          ×{row.quantity}
+        </span>
       </span>
     </li>
   );

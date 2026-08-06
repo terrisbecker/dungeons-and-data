@@ -4,11 +4,15 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookOpenIcon,
   ChevronLeftIcon,
   LayoutDashboardIcon,
   MapPinIcon,
+  PackageIcon,
   SettingsIcon,
   SkullIcon,
+  SparklesIcon,
+  StarIcon,
   SwordsIcon,
   UsersIcon,
   type LucideIcon,
@@ -40,6 +44,18 @@ const NAV_ITEMS: NavItem[] = [
   { title: "Creatures", icon: SkullIcon, segment: "/creatures" },
   { title: "Encounters", icon: SwordsIcon, segment: "/encounters" },
   { title: "Settings", icon: SettingsIcon, segment: "/settings" },
+];
+
+// The shared catalogs (items/spells/feats/features) are global data, but
+// they render at a campaign-relative route (/campaigns/[id]/catalog/[type])
+// so the sidebar/shell stays put instead of navigating away from it.
+type CatalogNavItem = { title: string; icon: LucideIcon; segment: string };
+
+const CATALOG_NAV_ITEMS: CatalogNavItem[] = [
+  { title: "Items", icon: PackageIcon, segment: "/catalog/items" },
+  { title: "Spells", icon: BookOpenIcon, segment: "/catalog/spells" },
+  { title: "Feats", icon: StarIcon, segment: "/catalog/feats" },
+  { title: "Features", icon: SparklesIcon, segment: "/catalog/features" },
 ];
 
 export function CampaignWorkspace({
@@ -80,6 +96,28 @@ export function CampaignWorkspace({
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         isActive={isActive}
+                        tooltip={item.title}
+                        render={<Link href={href} />}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <SidebarGroup>
+            <SidebarGroupLabel>Catalogs</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {CATALOG_NAV_ITEMS.map((item) => {
+                  const href = `${base}${item.segment}`;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        isActive={pathname.startsWith(href)}
                         tooltip={item.title}
                         render={<Link href={href} />}
                       >

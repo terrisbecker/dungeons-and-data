@@ -79,6 +79,23 @@ export interface UpdateMembershipInput {
   role?: CampaignRole;
 }
 
+// GET/PATCH /campaign-economy-settings/:campaignId — the economy engine's
+// on/off toggle and global price floor/ceiling for a campaign (mirrors
+// campaign-economy-settings.queries.ts's select). Defaulted (not 404) when a
+// campaign hasn't saved settings yet.
+export interface CampaignEconomySettings {
+  campaignId: string;
+  economyEnabled: boolean;
+  floorPercent: number;
+  ceilingPercent: number;
+}
+
+export interface UpdateCampaignEconomySettingsInput {
+  economyEnabled?: boolean;
+  floorPercent?: number;
+  ceilingPercent?: number;
+}
+
 // A lean PlayerCharacter as returned by GET /characters (mirrors
 // characterListSelect in characters.queries.ts). alignment/size are enums on the
 // API, typed loosely here since the dashboard list only renders race/HP/AC.
@@ -123,8 +140,32 @@ export interface LocationRow {
   parentId: string | null;
   parent: LocationSummary | null;
   children: LocationSummary[];
+  // Economy engine sliders (DM-set). A location whose (trimmed, lowercased)
+  // `type` is "building" gets a building inventory in the frontend — see
+  // isBuildingType() in lib/location-labels.ts. supplyLevel/demandLevel are
+  // the global fallback, used for every item type when useItemTypeEconomy is
+  // false; when true, per-type overrides come from LocationItemTypeEconomy
+  // (GET /location-item-economy?locationId=) instead — see that type below.
+  supplyLevel: number;
+  demandLevel: number;
+  useItemTypeEconomy: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// GET /location-item-economy?locationId= — one row per ItemType a DM has
+// adjusted for this location (sparse; a type with no row is neutral, 0/0).
+// Only consulted when the owning LocationRow.useItemTypeEconomy is true.
+export interface LocationItemTypeEconomy {
+  locationId: string;
+  itemType: ItemType;
+  supplyLevel: number;
+  demandLevel: number;
+}
+
+export interface UpdateLocationItemTypeEconomyInput {
+  supplyLevel?: number;
+  demandLevel?: number;
 }
 
 // GET /locations/:id — locationDetailSelect adds the creatures placed here.
@@ -142,6 +183,9 @@ export interface CreateLocationInput {
   description?: string | null;
   parentId?: string | null;
   campaignId?: string | null;
+  supplyLevel?: number;
+  demandLevel?: number;
+  useItemTypeEconomy?: boolean;
 }
 
 // A location never changes campaigns from the UI, so campaignId is create-only.
@@ -439,6 +483,22 @@ export interface InventoryItemInput {
   quantity?: number;
   equipped?: boolean;
   attuned?: boolean;
+}
+
+// GET /inventory-items?locationId= — a building's stock (mirrors the `select`
+// in inventory-items.queries.ts). Unlike character/creature-owned inventory,
+// this is the one place a computed price is ever shown: `pricing` is null
+// only for a priceless item (ItemCatalog.baseValueCp === null); when the
+// economy is off, buyValueCp is just the unmodified base value.
+export interface BuildingInventoryItem {
+  id: string;
+  itemId: string;
+  locationId: string;
+  quantity: number;
+  equipped: boolean;
+  attuned: boolean;
+  item: ItemCatalog;
+  pricing: { buyValueCp: number; sellValueCp: number } | null;
 }
 
 // POST /character-spells.

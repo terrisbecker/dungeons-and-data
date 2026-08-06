@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { ChevronRightIcon, MapPinIcon } from "lucide-react";
-import type { LocationDetail, LocationRow } from "@dnd/shared";
+import type {
+  BuildingInventoryItem,
+  LocationDetail,
+  LocationItemTypeEconomy,
+  LocationRow,
+} from "@dnd/shared";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeleteLocationDialog } from "./delete-location-dialog";
+import { LocationBuildingInventory } from "./location-building-inventory";
 import { LocationCreatures } from "./location-creatures";
+import { LocationEconomySliders } from "./location-economy-sliders";
 import { LocationFormDialog } from "./location-form-dialog";
 import { ancestorsOf, childrenOf, indexLocations } from "./location-tree";
 
@@ -16,11 +23,17 @@ export function LocationsBrowser({
   all,
   current,
   canManage,
+  buildingInventory,
+  itemTypeEconomies,
 }: {
   campaignId: string;
   all: LocationRow[];
   current: LocationDetail | null;
   canManage: boolean;
+  // Present only when `current` is a `type: "building"` location.
+  buildingInventory?: BuildingInventoryItem[];
+  // Present only when `current.useItemTypeEconomy` is true.
+  itemTypeEconomies?: LocationItemTypeEconomy[];
 }) {
   const base = `/campaigns/${campaignId}/locations`;
   const index = indexLocations(all);
@@ -134,6 +147,22 @@ export function LocationsBrowser({
           </ul>
         )}
       </section>
+
+      {current && (
+        <LocationEconomySliders
+          location={current}
+          itemTypeEconomies={itemTypeEconomies}
+          canManage={canManage}
+        />
+      )}
+
+      {current && buildingInventory !== undefined && (
+        <LocationBuildingInventory
+          locationId={current.id}
+          inventory={buildingInventory}
+          canManage={canManage}
+        />
+      )}
 
       {current && (
         <LocationCreatures

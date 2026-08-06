@@ -197,20 +197,35 @@ export const guardLocationByParamId = guard(async (auth, req) => {
   }
 });
 
+// --- Location per-item-type economy overrides -------------------------------
+
+// PATCH/DELETE /location-item-economy/:locationId/:itemType — same rule as
+// the location's own global sliders.
+export const guardLocationItemEconomyByParams = guard((auth, req) =>
+  assertCanWriteLocation(auth, requireUuid(req.params.locationId)),
+);
+
 // --- Inventory items (polymorphic owner) -----------------------------------
 
 export const guardInventoryCreate = guard(async (auth, req) => {
   const body = asRecord(req.body);
   const characterId = optionalUuidField(body, "characterId");
   const creatureId = optionalUuidField(body, "creatureId");
-  // Exactly one owner — mirrors the service/DB XOR so a bad body 400s here.
-  if ((characterId === undefined) === (creatureId === undefined)) {
+  const locationId = optionalUuidField(body, "locationId");
+  // Exactly one owner — mirrors the service/DB three-way XOR so a bad body
+  // 400s here.
+  const ownerCount = [characterId, creatureId, locationId].filter(
+    (v) => v !== undefined,
+  ).length;
+  if (ownerCount !== 1) {
     throw badRequest();
   }
   if (characterId !== undefined) {
     await assertCanWriteCharacter(auth, characterId);
+  } else if (creatureId !== undefined) {
+    await assertCanWriteCreature(auth, creatureId);
   } else {
-    await assertCanWriteCreature(auth, creatureId as string);
+    await assertCanWriteLocation(auth, locationId as string);
   }
 });
 
@@ -221,6 +236,8 @@ export const guardInventoryByParamId = guard(async (auth, req) => {
     await assertCanWriteCharacter(auth, owner.characterId);
   } else if (owner.creatureId) {
     await assertCanWriteCreature(auth, owner.creatureId);
+  } else if (owner.locationId) {
+    await assertCanWriteLocation(auth, owner.locationId);
   } else {
     throw notFound();
   }
@@ -250,6 +267,13 @@ export const guardPlayerUpdate = guard((auth, req) => {
 // PATCH/DELETE /campaigns/:id — Admin or a DM of that campaign.
 export const guardCampaignByParamId = guard((auth, req) =>
   assertCanWriteCampaign(auth, requireUuid(req.params.id)),
+);
+
+// --- Campaign economy settings ----------------------------------------------
+
+// PATCH /campaign-economy-settings/:campaignId — Admin or a DM of that campaign.
+export const guardCampaignEconomySettingsByParamId = guard((auth, req) =>
+  assertCanWriteCampaign(auth, requireUuid(req.params.campaignId)),
 );
 
 // --- Campaign memberships ---------------------------------------------------
